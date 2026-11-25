@@ -15,23 +15,27 @@ erDiagram
     CUSTOMER ||--o{ ORDER : places
     CUSTOMER ||--o{ INVOICE : billed
     CUSTOMER ||--o{ PAYMENT : settles
+    SUPPLIER ||--o{ PURCHASE : supplies
+    PURCHASE ||--|{ PURCHASE_ITEM : itemizes
     ORDER ||--o| INVOICE : converts
+    INVOICE ||--|{ INVOICE_ITEM : itemizes
+    INVOICE ||--o{ CREDIT_NOTE : reverses
     ITEM ||--o{ BOM_ITEM : recipe_ingredient
     ITEM ||--o{ BOM : finished_product
     BOM ||--o{ PRODUCTION_RUN : executes
     PRODUCTION_RUN ||--|{ PRODUCTION_CONSUMPTION : consumes
+    ITEM ||--o{ STOCK_BATCH : lots
     ITEM ||--o{ STOCK_LEDGER : tracks_movement
-    INVOICE ||--|{ INVOICE_ITEM : itemizes
 ```
 
 ### Core Architectural Decisions
-1. **Single Source of Truth (SSOT) Ledger:** There is no editable `stock` field in the catalog. All inventory balances are materialized strictly through an append-only `StockLedger` table.
-2. **Paise/Decimal Arithmetic:** All currency calculations use high-precision decimals (`Decimal(12, 2)`) to eliminate floating-point rounding errors.
+1. **Single Source of Truth (SSOT) Ledger & Lots:** There is no editable `stock` field in the catalog. All inventory balances are materialized strictly through an append-only `StockLedger` backed by FIFO/FEFO `StockBatch` lots.
+2. **Zero-Float Decimal Arithmetic & Unit Conversions:** All server math uses `decimal.js` / `Prisma.Decimal` (`Decimal(12, 2)` currency, `Decimal(12, 3)` quantities) with deterministic conversions across `kg`/`g`, `L`/`ml`, `piece`/`packet`/`carton`.
 3. **Role-Based Isolation:** Dynamic role layouts:
-   * **Salesman:** High-contrast, mobile-first view for fast order entry under poor network conditions.
-   * **Factory Admin:** Order approval, stock sufficiency verification, GST tax invoicing, and dispatch.
+   * **Salesman:** High-contrast, mobile-first view for fast order entry under poor network conditions (with idempotent offline sync).
+   * **Factory Admin:** Order approval, stock sufficiency verification, GST tax invoicing, dispatch, procurement, and payment logging.
    * **Production Supervisor:** Recipe (BOM) management, daily run logging, variance tracking.
-   * **Auditor / Accountant:** Read-only access to sales, GST, stock ledger, and aging receivables with Excel/PDF export.
+   * **Auditor / Accountant:** Read-only access to all 6 monthly reports (Sales, GST, Purchase, Stock, Production, Receivables) with Excel/CSV and PDF export.
    * **Owner:** Executive dashboard with variance alerts, margin analysis, and receivables.
 
 ---
@@ -101,9 +105,9 @@ Dividing by **actual good packets (188)** rather than standard batch size (200) 
 1. **Place of Supply Tax Engine:**
    * **Intra-State (Tamil Nadu):** 5% GST split equally as **2.5% CGST** and **2.5% SGST**.
    * **Inter-State (e.g., Karnataka):** 5% charged as **IGST**.
-2. **Immutable Audit Trail:**
-   * Invoices cannot be deleted. Any billing error is rectified through a credit note, leaving a permanent ledger record for statutory auditors.
-   * GSTR-1 and GSTR-3B summary formats map directly to statutory Indian tax returns.
+2. **Immutable Audit Trail & Statutory Exports:**
+   * Invoices and production runs cannot be deleted. Edits are recorded in `AuditLog` with user and timestamp, and posted invoices are reversed via `CreditNote` (restocking finished goods **only** if `dispatchStatus === 'DISPATCHED'`).
+   * GSTR-1 and GSTR-3B summary formats map directly to statutory Indian tax returns, alongside Tally XML/Excel voucher exports and mocked NIC e-Invoice (IRN/QR) & e-Way Bill JSON payloads.
 
 ---
 

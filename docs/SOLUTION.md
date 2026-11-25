@@ -58,10 +58,10 @@ Overhead Costing (Unit Cost per Packet)
 
 ## 4. Key Architectural Highlights
 
-1. **Immutable Double-Entry Stock Ledger:** Inventory balances are never overwritten. Every movement is an immutable row in `StockLedger` linked to a source document (`Purchase`, `ProductionRun`, `Invoice`, or `Adjustment`).
-2. **Zero Floating-Point Drift:** Monetary values and quantities use high-precision decimals (`Decimal(12, 2)`) to ensure zero rounding drift.
-3. **Dynamic & Scalable (Zero Hardcoding):** Products, BOMs, tax rules, and customers are dynamic database records. The Section 5 benchmark data is loaded via a standalone seed script (`npx prisma db seed`).
-4. **$0 Operating Cost:** Fully cloud-deployable on **Vercel** with **Neon Serverless PostgreSQL**, remaining 100% within free-tier limits.
+1. **Immutable Double-Entry Stock Ledger:** Inventory balances are never overwritten. Every movement is an immutable row in `StockLedger` backed by FIFO/FEFO `StockBatch` lots and linked to a source document (`Purchase`, `ProductionRun`, `Invoice`, `CreditNote`, or `Adjustment`).
+2. **Zero Floating-Point Drift:** Monetary values and quantities use `decimal.js` / `Prisma.Decimal` on the server backed by PostgreSQL `Decimal(12, 2)` / `Decimal(12, 3)`.
+3. **Dynamic & Scalable (Zero Hardcoding):** Products, pack sizes, unit conversions (`kg`/`g`/`L`/`ml`/`piece`/`packet`/`carton`), BOMs, tax rules, and company settings are dynamic database records. The Section 5 benchmark data is loaded via `npx prisma db seed`.
+4. **$0 Operating Cost & Local Docker Support:** Cloud-deployable on **Vercel** + **Neon Serverless PostgreSQL** ($0 free tier) and runnable locally with one command via **Docker Compose**.
 5. **Role-Based Isolation (RBAC):** Dedicated views tailored for Salesman (mobile phone), Factory Admin (desktop), Production Supervisor (floor tablet), Auditor (read-only export), and Business Owner (KPI dashboard).
 
 ---
@@ -71,19 +71,23 @@ Overhead Costing (Unit Cost per Packet)
 | Tier | Module | Key Features |
 | :--- | :--- | :--- |
 | **Must-Have** | **Authentication & RBAC** | Role-based navigation for Salesman, Admin, Production, Auditor, and Owner. |
-| | **Masters** | Customers (TN/Interstate), Suppliers, Items (Raw/Pack/Finished), BOM Recipes. |
+| | **Masters** | Customers (TN/Interstate), Suppliers, Items (Raw/Pack/Finished), Unit Conversions, BOM Recipes. |
 | | **Sales Loop** | Mobile order taking, stock sufficiency validation, GST tax invoice, PDF download. |
 | | **Production Loop**| BOM issuance, run logging, planned vs actual consumption & yield, variance flags. |
 | | **Inventory** | Append-only Stock Ledger, real-time stock summary with source traceability. |
-| | **Audit Reports** | Sales register, Stock summary, and CSV/Excel exports. |
-| **Should-Have** | **Procurement** | Raw material purchase orders and supplier bills. |
+| | **Audit Reports** | Sales register, Purchase register, Production report, GST summary, Stock summary/ledger, Receivables/collections, exportable to Excel/CSV & PDF. |
+| **Should-Have** | **Procurement** | Raw material purchases and supplier bills with batch/expiry capture. |
 | | **Receivables** | Payment collection entry, invoice settlement, and aging debtor reports. |
 | | **Costing** | FIFO material valuation, direct overhead absorption (Labour + Power/Gas), cost per packet. |
-| | **Compliance** | GSTR-1 outward supply summary, tolerance alerts ($\pm 3\%$). |
+| | **Compliance** | GSTR-1 / GSTR-3B outward supply summary, tolerance alerts ($\pm 3\%$), `AuditLog` edit tracking. |
 | | **Executive View** | Owner dashboard with real-time stock, daily orders, and margin metrics. |
-| **Stretch Goals** | **Offline Sync** | LocalStorage/IndexedDB order caching for salesmen with spotty network. |
+| **Stretch Goals** | **Offline Sync** | LocalStorage/IndexedDB order caching with idempotent `clientRequestId` sync. |
+| | **Batch & Expiry** | `StockBatch` lot & expiry tracking with FEFO dispatch prioritization. |
+| | **Production Planner** | Recommended batch runs calculated from pending orders vs. finished stock. |
 | | **WhatsApp Share** | Deep link sharing of invoice PDFs directly to customer WhatsApp numbers. |
-| | **Reversals** | Auditable credit notes and stock adjustments for immutable error handling. |
+| | **Tally Export** | Tally Prime XML & Excel voucher export (Sales, Purchase, Receipt + GST ledgers). |
+| | **e-Invoice / e-Way** | Mocked NIC IRN / Signed QR & e-Way Bill JSON export per GST invoice. |
+| | **Reversals** | Auditable credit notes (restocking only if dispatched) and stock adjustments. |
 
 ---
 

@@ -15,9 +15,9 @@ This document outlines the security architecture, threat model, and defense mech
 | **A03: Injection (SQL / Command)** | Attacker injecting SQL via order forms or report filters. | 100% parameterized queries via Prisma ORM. Direct raw string interpolation in SQL is strictly prohibited. |
 | **A04: Insecure Design** | Negative inventory balance manipulation; tampering with calculated invoice amounts. | Strict server-side Zod validation schemas; calculations performed exclusively on the server (client inputs only item IDs & quantities). |
 | **A05: Security Misconfiguration** | Leaked database credentials; exposed staging keys. | Environment variables (`.env`) isolated via Vercel secrets; zero secret commits in Git (`.gitignore` enforced). |
-| **A07: Identification & Auth Failures** | Brute force login; session hijacking. | Session tokens stored in `HttpOnly`, `SameSite=Lax`, `Secure` cookies; account lockout / rate limiting on authentication routes. |
-| **A08: Software & Data Integrity Failures** | Direct tampering of stock records or deletion of posted tax invoices. | Immutable Stock Ledger design. Invoices cannot be deleted; corrections require explicit Credit Notes or Stock Adjustments. |
-| **A09: Security Logging & Monitoring** | Untracked modifications to financial invoices or production formulas. | Complete audit trail columns (`createdAt`, `updatedAt`, `userId`, `notes`) across all transaction and ledger tables. |
+| **A07: Identification & Auth Failures** | Brute force login; session hijacking; deactivated user retaining cookie. | Signed `jose` HS256 JWT in `HttpOnly`, `SameSite=Lax`, `Secure` cookies verified at Edge; DB-backed `failedLoginAttempts`/`lockedUntil` (5 tries $\rightarrow$ 15 min lock) and `tokenVersion` + `User.active` check on Server Actions. |
+| **A08: Software & Data Integrity Failures** | Direct tampering of stock records, master deletion, or CSV/Excel formula injection. | Immutable Stock Ledger design; soft deactivation (`active = false`) for masters; Credit Notes (restocking only if dispatched); CSV/Excel cell sanitization against `=`, `+`, `-`, `@` injection (CWE-1236). |
+| **A09: Security Logging & Monitoring** | Untracked modifications to financial invoices or production formulas. | Dedicated `AuditLog` table recording before/after diffs, `userId`, `reason`, and timestamps on every edit or cancellation, plus `createdAt`/`createdById` across all transaction tables and `/api/health` diagnostics. |
 
 ---
 
@@ -48,18 +48,34 @@ All database interactions flow through **Prisma ORM**, which compiles queries in
 * User inputs are never concatenated directly into query strings.
 * Any complex analytical queries use typed Prisma query APIs or strictly parameterized `$queryRaw`.
 
-### 4.3 Session & Cookie Security
-* Authentication sessions are managed using encrypted, signed tokens stored inside HTTP cookies.
-* **`HttpOnly` Flag:** Prevents client-side scripts from reading the cookie, neutralizing Cross-Site Scripting (XSS) token theft.
-* **`Secure` Flag:** Ensures cookies are only transmitted over HTTPS connections.
-* **`SameSite=Lax`:** Protects against Cross-Site Request Forgery (CSRF) attacks.
+### 4.3 Session, Edge Auth & Brute-Force Protection
+* **Two-Layer Session Verification:**
+  * **Edge Middleware (`jose` HS256 JWT):** Verifies the signed `HttpOnly`, `Secure` (in HTTPS/production), `SameSite=Lax` session cookie without opening TCP connections in Edge Runtime, redirecting unauthenticated or wrong-role requests before rendering.
+  * **Server Action / RSC Guard:** Reads `User.active` and compares `session.tokenVersion === user.tokenVersion` from PostgreSQL on every privileged action/mutation so deactivated accounts or password resets invalidate existing sessions immediately.
+* **Serverless-Safe Account Lockout:** Failed login attempts increment `User.failedLoginAttempts` in PostgreSQL; after 5 consecutive failures, `User.lockedUntil` is set to `+15 minutes` (unaffected by serverless cold starts). Successful login resets the counter.
 
-### 4.4 Non-Destructive Ledger & Audit Trail
-In compliance with statutory accounting principles:
-* **No `DELETE` operations** are permitted on `Invoice`, `StockLedger`, or `ProductionRun` tables.
-* If an order or invoice is cancelled, the system creates a compensating record (e.g., a **Credit Note** or **Stock Adjustment** reversal) linked to the original document ID.
-* The historical ledger remains continuous, immutable, and fully verifiable by external auditors.
+### 4.4 RBAC Permission Matrix & IDOR Isolation
+Every Server Action and Route Handler calls `requireRole([...])` and enforces ownership scoping:
 
-### 4.5 Secret Management & Zero-Cost Security
-* Production credentials (`DATABASE_URL`, `SESSION_SECRET`) are stored in Vercel’s encrypted environment variables.
-* Database connections utilize SSL mode (`sslmode=require`) to encrypt all traffic between Vercel serverless functions and Neon PostgreSQL.
+| Role | Allowed Mutations | Read Scope & IDOR Rules |
+| :--- | :--- | :--- |
+| **`SALESMAN`** | Create `Order` (only for active customers assigned to them or open territory). | **Strictly scoped:** Can read only `Order` records where `order.salesmanId === session.userId`. Cannot view other salesmen's orders, factory costs, supplier bills, or admin reports. |
+| **`FACTORY_ADMIN`** | Approve/edit/hold/reject orders, generate & dispatch invoices, issue credit notes, record purchases, supplier/customer payments, stock adjustments, manage masters & settings. | Full operational read access; all edits/overrides/adjustments write mandatory `AuditLog` entries. |
+| **`PRODUCTION_SUPERVISOR`** | Create/edit `BOM`, start/complete `ProductionRun` (logging consumption, yield, scrap, overheads). | Can read items, stock levels, BOMs, and production runs; cannot alter invoices, payments, or customer ledgers. |
+| **`AUDITOR`** | **None (Strictly Read-Only).** Blocked from all mutating Server Actions. | Read & export access to all 6 statutory reports, `AuditLog`, and Tally exports. |
+| **`OWNER`** | **None (Read-Only Executive View)** unless explicitly elevated. | Read access to executive KPIs, margins, variance alerts, stock levels, and receivables. |
+
+### 4.5 Non-Destructive Ledger, Master Deactivation & Export Sanitization
+* **No `DELETE` Operations:** `Invoice`, `StockLedger`, `ProductionRun`, `Purchase`, and `AuditLog` rows are never hard-deleted. Masters (`User`, `Customer`, `Supplier`, `Item`, `BOM`) use `active = false` soft deactivation so historical ledger references remain intact.
+* **Compensating Reversals:** Cancelled invoices generate a `CreditNote` and restock finished goods **only** if `dispatchStatus === 'DISPATCHED'`.
+* **CSV/Excel Formula Injection Guard (CWE-1236):** Export utilities neutralize any string cell beginning with `=`, `+`, `-`, `@`, `\t`, or `\r` by prefixing a single quote (`'`) before generating CSV/XLSX files.
+
+### 4.6 Secret Management, HTTP Security Headers & Zero-Cost Security
+* Production credentials (`DATABASE_URL`, `SESSION_SECRET`) are stored in Vercel’s encrypted environment variables (`sslmode=require` to Neon PostgreSQL).
+* **Mandatory Security Headers:** Configured in `next.config` / Middleware: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`, and `Content-Security-Policy`.
+
+### 4.7 Demo Mode Guard, Idempotency & Concurrency Locks
+* **Demo Switcher & Seed Reset Gating:** 1-click role-switcher buttons on `/login` are enabled only when `ENABLE_DEMO_MODE="true"`, and the benchmark seed-reset action requires both `ENABLE_DEMO_MODE="true"` and explicit confirmation/admin authorization so production data can never be wiped by unauthenticated visitors.
+* **Offline Sync Idempotency:** Mobile field orders include a unique `clientRequestId` UUID generated on the client so intermittent 3G/4G retries never create duplicate orders.
+* **Transactional Stock Locking:** FIFO `StockBatch` deductions execute inside `prisma.$transaction` with row-level locks (`SELECT ... FOR UPDATE`) to prevent race conditions and negative stock under concurrent dispatches or runs.
+* **Healthcheck Endpoint:** `/api/health` verifies database connectivity and ledger reconciliation status without leaking secrets.

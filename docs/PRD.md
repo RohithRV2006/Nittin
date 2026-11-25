@@ -42,7 +42,7 @@ To eliminate paper-based coordination, unrecorded production waste, and month-en
 ### Epic 1: Field Order Capture (Salesman)
 
 * **FR-1.1 Mobile-First Order Interface:** Optimized responsive UI allowing salesmen to select a customer (retailer/distributor), add item quantities, and submit in under 60 seconds.
-* **FR-1.2 Customer Price Catalog:** Prices automatically pulled from master product catalog; allows custom distributor rates if configured.
+* **FR-1.2 Customer Price Catalog:** Prices automatically pulled from master product catalog (`Item.sellingPrice`), with optional per-customer rate overrides (`CustomerPrice`).
 * **FR-1.3 Real-time Order Submission:** Orders post directly to factory queue without requiring WhatsApp messages or phone calls.
 * **FR-1.4 Order Status Visibility:** Salesman can view the lifecycle status of submitted orders (`SUBMITTED` $\rightarrow$ `APPROVED` $\rightarrow$ `INVOICED` $\rightarrow$ `DISPATCHED`).
 * **FR-1.5 Customer-wise Sales History:** Salesman can view their own historical bookings per customer.
@@ -61,12 +61,12 @@ To eliminate paper-based coordination, unrecorded production waste, and month-en
 
 ### Epic 3: Bill of Materials (BOM) & Production Run (Production)
 
-* **FR-3.1 Standard Recipe Master (BOM):** Defines standard raw material and packaging quantities required per batch and expected packet yield (e.g., 200 packets for Murukku 200g).
+* **FR-3.1 Standard Recipe Master (BOM):** Defines standard raw material and packaging quantities required per batch and expected packet yield (e.g., 200 packets for Murukku 200g), with automatic unit conversion (`kg`/`g`, `litre`/`ml`, `piece`/`packet`/`carton`) and multi-pack scaling.
 * **FR-3.2 Production Run Entry:** Supervisor logs:
-    - Product and batch run date.
+    - Product, batch multiplier, and batch run date (in 1 step or 2-step `Start Run` $\rightarrow$ `Complete Run`).
     - Actual raw materials issued (e.g., 40 kg flour, 10.5 L oil, 1.2 kg spices).
     - Packaging materials used and damaged/scrap pouches (e.g., 188 good packets, 6 damaged pouches, 9 cartons).
-* **FR-3.3 Automatic Stock Updates:** Saving a run automatically decrements raw/packaging inventory and increments finished goods in the `StockLedger`.
+* **FR-3.3 Automatic Stock Updates:** Saving a run automatically decrements raw/packaging inventory from FIFO `StockBatch` lots (supporting optional expiry dates / FEFO) and increments finished goods in the `StockLedger`.
 * **FR-3.4 Variance Engine & Alerts:**
     - Computes Yield Variance: $\frac{\text{Actual} - \text{Expected}}{\text{Expected}} \times 100$.
     - Computes Material Consumption Variance per ingredient.
@@ -88,19 +88,21 @@ To eliminate paper-based coordination, unrecorded production waste, and month-en
 
 ### Epic 6: Statutory Audit & Compliance Reports (Auditor)
 
-* **FR-6.1 Sales Register:** Filterable by date range, customer, and product.
-* **FR-6.2 GST Outward Supplies Summary:** Tabular breakdown structured for GSTR-1 / GSTR-3B filing (Taxable value, CGST, SGST, IGST).
-* **FR-6.3 Stock Ledger & Summary:** Complete movement history per SKU with opening, inward, outward, and closing balances.
-* **FR-6.4 Customer Receivables & Aging:** Outstanding dues grouped into aging brackets (0–30, 31–60, 61–90, 90+ days).
-* **FR-6.5 Data Export:** 1-click export to CSV/Excel for auditor analysis.
+* **FR-6.1 Sales Register:** Filterable by date range, customer, and product (customer-wise and product-wise views).
+* **FR-6.2 GST Outward Supplies Summary:** Tabular breakdown structured for GSTR-1 / GSTR-3B filing (Taxable value, CGST, SGST, IGST, including Credit Notes).
+* **FR-6.3 Purchase Register:** Filterable inward supplier bills with vendor GSTIN, taxable value, input GST, and bill totals.
+* **FR-6.4 Stock Ledger & Summary:** Complete opening, inward, outward, and closing summary plus transactional movement ledger across raw materials, packaging, and finished goods.
+* **FR-6.5 Production Report:** Batch-wise planned vs. actual consumption, yield, wastage/scrap, variance flags, and cost per packet.
+* **FR-6.6 Payments, Collections & Receivables Ageing:** Customer collections and outstanding dues grouped into ageing brackets (0–30, 31–60, 61–90, 90+ days).
+* **FR-6.7 Data & Statutory Accounting Exports:** 1-click export of all 6 statutory reports to **Excel/CSV and PDF** (with CWE-1236 formula-injection sanitization), plus **Tally-compatible XML/Excel voucher export** and **mocked NIC e-Invoice (IRN/QR) & e-Way Bill JSON export**.
 
 ---
 
 ## 5. Non-Functional Requirements (NFRs)
 
-* **NFR-1 (Arithmetic Precision):** Zero floating-point drift. All financial amounts and inventory quantities must use high-precision decimals (`Decimal(12, 2)` for currency, `Decimal(12, 3)` for units).
-* **NFR-2 (Response Latency):** Sub-second response times (< 1.5s) for mobile order entry and invoice generation on standard 3G/4G connections.
-* **NFR-3 (Data Integrity & ACID):** Multi-table updates (e.g., invoice generation + stock ledger debit + order status transition) must execute inside atomic transactions (`prisma.$transaction`).
-* **NFR-4 (Security & Immutability):** Role-Based Access Control enforced at middleware and Server Action levels. Strict input validation via Zod schemas. Posted invoices cannot be hard-deleted.
-* **NFR-5 (Zero Cost Compliance):** Architecture must run completely within free-tier quotas on Vercel and Neon PostgreSQL with $0 financial expenditure.
+* **NFR-1 (Arithmetic Precision):** Zero floating-point drift. All server-side financial and quantity math must use `decimal.js` / `Prisma.Decimal` (`Decimal(12, 2)` for currency, `Decimal(12, 3)` for physical units).
+* **NFR-2 (Response Latency):** Sub-second response times (< 1.5s) for mobile order entry and invoice generation on standard 3G/4G connections, with offline `clientRequestId` idempotency.
+* **NFR-3 (Data Integrity & ACID):** Multi-table updates (e.g., invoice generation + stock ledger debit + FIFO `StockBatch` decrement + order status transition) must execute inside atomic transactions (`prisma.$transaction`).
+* **NFR-4 (Security & Immutability):** Two-layer RBAC (`jose` JWT at Edge + `User.active`/`tokenVersion` DB checks on Server Actions), DB-backed brute-force lockout, IDOR ownership scoping, strict Zod schemas, HTTP security headers (`CSP`, `X-Frame-Options`), non-destructive ledger (`AuditLog` + soft deactivation), and `ENABLE_DEMO_MODE` gating.
+* **NFR-5 (Zero Cost & Local Run Compliance):** Architecture runs completely within free-tier quotas on Vercel and Neon PostgreSQL ($0) and supports single-command local startup via Docker Compose, backed by automated Vitest unit & Section 5 benchmark E2E tests.
 * **NFR-6 (Usability):** High-contrast UI suitable for low-light factory floors and outdoor retail environments. Salesman order flow executable within 4 clicks.

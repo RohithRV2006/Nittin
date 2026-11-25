@@ -198,14 +198,17 @@ sequenceDiagram
     Admin->>System: approveAndGenerateInvoice(orderId)
     Note over System: Place of supply check: TN -> CGST (2.5%) + SGST (2.5%)
     System->>DB: BEGIN TRANSACTION
-    System->>DB: INSERT INTO "Invoice" (taxable: 7500, cgst: 187.50, sgst: 187.50, total: 7875)
+    System->>DB: INSERT INTO "Invoice" (taxable: 7500, cgst: 187.50, sgst: 187.50, total: 7875, dispatchStatus: PENDING_DISPATCH)
+    System->>DB: INSERT INTO "InvoiceItem" & "AuditLog"
     System->>DB: UPDATE "Order" SET status = 'INVOICED'
     System->>DB: COMMIT TRANSACTION
     System-->>Admin: Invoice INV/2024-25/0001 Generated (PDF Ready)
 
     Admin->>System: recordDispatch(invoiceId)
     System->>DB: BEGIN TRANSACTION
+    System->>DB: LOCK & DECREMENT "StockBatch" (FIFO/FEFO)
     System->>DB: INSERT INTO "StockLedger" (Murukku, qty: -150, type: DISPATCH_SALE)
+    System->>DB: UPDATE "Invoice" SET dispatchStatus = 'DISPATCHED', dispatchedAt = now()
     System->>DB: UPDATE "Order" SET status = 'DISPATCHED'
     System->>DB: COMMIT TRANSACTION
     System-->>Admin: Dispatch Logged (Stock drops to 88 pkts)
@@ -242,13 +245,16 @@ sequenceDiagram
     CostingEngine-->>System: Cost/Packet: ₹30.90, Margin: ₹19.10
 
     System->>DB: BEGIN TRANSACTION
+    System->>DB: LOCK & DECREMENT "StockBatch" (FIFO)
     System->>DB: INSERT INTO "ProductionRun" (actualOutput: 188, costPerPacket: 30.90, varianceFlagged: true)
     System->>DB: INSERT INTO "StockLedger" (Flour, qty: -40.0, type: PRODUCTION_ISSUE)
     System->>DB: INSERT INTO "StockLedger" (Oil, qty: -10.5, type: PRODUCTION_ISSUE)
     System->>DB: INSERT INTO "StockLedger" (Spices, qty: -1.2, type: PRODUCTION_ISSUE)
-    System->>DB: INSERT INTO "StockLedger" (Pouches, qty: -194, type: PRODUCTION_ISSUE)
+    System->>DB: INSERT INTO "StockLedger" (Pouches, qty: -188, type: PRODUCTION_ISSUE)
+    System->>DB: INSERT INTO "StockLedger" (Pouches, qty: -6, type: SCRAP_DAMAGE)
     System->>DB: INSERT INTO "StockLedger" (Cartons, qty: -9, type: PRODUCTION_ISSUE)
-    System->>DB: INSERT INTO "StockLedger" (Murukku, qty: +188, type: PRODUCTION_OUTPUT)
+    System->>DB: INSERT INTO "StockBatch" & "StockLedger" (Murukku, qty: +188, type: PRODUCTION_OUTPUT)
+    System->>DB: INSERT INTO "AuditLog"
     System->>DB: COMMIT TRANSACTION
     System-->>Supervisor: Production Run PR-2024-001 Recorded & Stock Updated
 ```
@@ -265,11 +271,19 @@ sequenceDiagram
     Admin->>System: cancelPostedInvoice(invoiceId, reason)
     Note over System: Invoices cannot be DELETED. Reversal must be compensatory.
     System->>DB: BEGIN TRANSACTION
+    System->>DB: SELECT dispatchStatus FROM "Invoice" WHERE id = invoiceId
     System->>DB: UPDATE "Invoice" SET status = 'CANCELLED'
-    System->>DB: INSERT INTO "CreditNote" (invoiceId, amount, reason)
-    System->>DB: INSERT INTO "StockLedger" (Murukku, qty: +150, type: STOCK_ADJUSTMENT, notes: 'Restock from Cancelled Invoice')
+    System->>DB: UPDATE "Order" SET status = 'CANCELLED'
+    alt Invoice already dispatched (dispatchStatus == DISPATCHED)
+        System->>DB: INSERT INTO "CreditNote" (..., restocked: true, reason)
+        System->>DB: INSERT INTO "StockBatch" & "StockLedger" (Murukku, qty: +150, type: STOCK_ADJUSTMENT, ref: CREDIT_NOTE)
+    else Invoice not yet dispatched (PENDING_DISPATCH)
+        System->>DB: INSERT INTO "CreditNote" (..., restocked: false, reason)
+        Note over System: No stock adjustment needed since goods never left warehouse
+    end
+    System->>DB: INSERT INTO "AuditLog" (action: CANCEL, reason)
     System->>DB: COMMIT TRANSACTION
-    System-->>Admin: Credit Note Issued & 150 Packets Restocked into Ledger
+    System-->>Admin: Credit Note Issued (Stock Restocked Only If Dispatched)
 ```
 
 ---
@@ -321,10 +335,14 @@ flowchart TD
 stateDiagram-v2
     [*] --> SUBMITTED : Salesman submits order from field
     SUBMITTED --> REJECTED : Admin rejects (pricing / customer issue)
+    SUBMITTED --> ON_HOLD : Insufficient finished stock flagged
+    ON_HOLD --> APPROVED : Stock replenished & admin confirms
+    ON_HOLD --> REJECTED : Order cancelled before invoicing
     SUBMITTED --> APPROVED : Admin validates stock & confirms
     APPROVED --> INVOICED : GST Tax Invoice generated
     INVOICED --> DISPATCHED : Warehouse dispatches goods (Stock Ledger Debited)
-    INVOICED --> CANCELLED : Invoice cancelled (Credit Note generated)
+    INVOICED --> CANCELLED : Credit Note issued (no stock restock)
+    DISPATCHED --> CANCELLED : Credit Note issued (finished goods restocked)
     DISPATCHED --> [*]
     REJECTED --> [*]
     CANCELLED --> [*]

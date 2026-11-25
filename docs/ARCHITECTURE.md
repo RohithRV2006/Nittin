@@ -6,9 +6,9 @@ The Order-to-Audit ERP is an enterprise-grade, single-entry web platform designe
 ### Core Architectural Tenets:
 1. **Source-Level Single Entry:** Data is captured exclusively where the event occurs (e.g., salesman phone, factory weighing scale, billing desk).
 2. **Immutable Inventory as a Ledger:** Inventory balances are never edited as bare numbers. All stock levels are derived from an append-only ledger of signed movements.
-3. **Strict Decimal Arithmetic:** Currency and quantity computations use high-precision decimals (`Decimal(12, 2)` / `Decimal(12, 3)`) to eliminate floating-point rounding drift.
-4. **Zero-Hardcoding & Agility:** Business entities (products, BOM recipes, tax slabs, customer classifications, tolerance thresholds) are fully dynamic database entities.
-5. **Zero-Cost Deployment ($0):** Architecture operates 100% within free-tier serverless limits (Next.js on Vercel + PostgreSQL on Neon).
+3. **Strict Decimal Arithmetic:** Currency and quantity computations use `decimal.js` / `Prisma.Decimal` on the server backed by PostgreSQL `Decimal(12, 2)` / `Decimal(12, 3)` to eliminate floating-point rounding drift.
+4. **Zero-Hardcoding & Agility:** Business entities (products, BOM recipes, unit conversions, tax slabs, customer classifications, tolerance thresholds, company settings) are fully dynamic database entities.
+5. **Zero-Cost & Local Deployability ($0):** Architecture runs 100% within free-tier serverless limits (Next.js on Vercel + PostgreSQL on Neon) **and** includes a single-command local `docker-compose.yml` setup (Next.js + PostgreSQL 16).
 
 ---
 
@@ -39,10 +39,13 @@ flowchart TD
         end
 
         subgraph DomainEngines ["Domain Business Logic Engines"]
-            StockEngine["StockLedgerEngine (FIFO, Movements, Reconciliation)"]
+            StockEngine["StockLedgerEngine (FIFO Batches, Movements, Reconciliation)"]
+            UnitEngine["UnitConversionEngine (kg/g, L/ml, Carton/Packet)"]
             TaxEngine["TaxEngine (Place of Supply, CGST/SGST/IGST Splitting)"]
             BOMEngine["BOMVarianceEngine (Consumption, Yield, ±3% Tolerance)"]
             CostingEngine["CostingEngine (Direct Labour, Power/Gas, Cost/Packet)"]
+            AuditEngine["AuditEngine (Immutable Edit & Cancellation Trail)"]
+            ExportEngine["ExportEngine (PDF, CSV/XLSX Sanitized, Tally XML, Mock IRN/e-Way JSON)"]
         end
 
         ZodValidator["Zod Schema Validation & Sanitization"]
@@ -123,4 +126,5 @@ To ensure production agility and prevent brittle code, all business entities are
 1. **Dynamic Master Catalog:** Products, packaging materials, and raw ingredients are rows in `Item`. No item codes or product names exist in application code.
 2. **Configurable Bill of Materials (BOM):** Recipes support multi-ingredient and multi-packaging specifications with configurable yield ratios and individual tolerance thresholds (`BOM.tolerancePercent`).
 3. **Pluggable Tax Rules:** Place of supply tax determination inspects `Customer.stateCode` vs. factory origin (`33` for Tamil Nadu). If matching, system splits `Item.taxRate` into equal CGST and SGST shares; if differing, charges full rate as IGST.
-4. **Reproducible Benchmark Automation:** All Section 5 benchmark data is isolated in `prisma/seed.ts`. Resetting and validating the entire environment takes a single command (`npx prisma db seed`).
+4. **Reproducible Benchmark Automation & Automated Test Suite:** All Section 5 benchmark data is isolated in `prisma/seed.ts` (`npx prisma db seed`). Automated Vitest unit & integration suites verify Decimal/GST math, unit conversion, FIFO concurrency, RBAC/IDOR rules, Credit Note restock logic, and the full 9-step Section 5 benchmark.
+5. **Health & Observability:** `/api/health` validates database connectivity and ledger reconciliation invariants in real time.
