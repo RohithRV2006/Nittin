@@ -1,16 +1,43 @@
-import { PageHeader } from "@/components/ui/PageHeader";
-import { InlineAlert } from "@/components/ui/InlineAlert";
+import {
+  AuditLogClient,
+  type AuditLogPageData,
+} from "@/components/auditor/AuditLogClient";
+import { parseDateRangeParams } from "@/lib/engines/reports";
+import { prisma } from "@/lib/prisma";
 
-export default function AuditorAuditLogPage() {
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Audit Trail"
-        subtitle="Immutable record of order edits, invoice cancellations, stock adjustments, and user changes"
-      />
-      <InlineAlert variant="info" title="Module Ready for Feature Buildout">
-        Filterable audit diff viewer will be wired here next.
-      </InlineAlert>
-    </div>
-  );
+export const dynamic = "force-dynamic";
+
+export default async function AuditorAuditLogPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string; fy?: string }>;
+}) {
+  const filter = parseDateRangeParams(await searchParams);
+
+  const logs = await prisma.auditLog.findMany({
+    where: {
+      createdAt: { gte: filter.fromDate, lte: filter.toDate },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 250,
+    include: { user: { select: { name: true, role: true } } },
+  });
+
+  const data: AuditLogPageData = {
+    from: filter.from,
+    to: filter.to,
+    logs: logs.map((l) => ({
+      id: l.id,
+      timestamp: l.createdAt.toISOString().replace("T", " ").slice(0, 16),
+      actorName: l.user.name,
+      actorRole: l.user.role,
+      entityType: l.entityType,
+      entityId: l.entityId,
+      action: l.action,
+      reason: l.reason,
+      changesPreview: l.changes ? JSON.stringify(l.changes) : "—",
+    })),
+  };
+
+  return <AuditLogClient data={data} />;
 }
