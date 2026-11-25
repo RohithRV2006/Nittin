@@ -2,12 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import {
+import type {
   CustomerType,
   ItemCategory,
   Role,
   UnitType,
 } from "@prisma/client";
+import { UNIT_TYPES, USER_ROLES } from "@/lib/enums";
 import {
   createUserAction,
   toggleCustomerActiveAction,
@@ -128,8 +129,8 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
   }>({
     code: "",
     name: "",
-    category: ItemCategory.RAW_MATERIAL,
-    unit: UnitType.KG,
+    category: "RAW_MATERIAL",
+    unit: "KG",
     packWeightGrams: "",
     unitsPerCarton: "",
     hsnCode: "",
@@ -154,7 +155,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
     assignedSalesmanId: string;
   }>({
     name: "",
-    type: CustomerType.RETAILER,
+    type: "RETAILER",
     gstin: "",
     state: "",
     stateCode: "",
@@ -203,13 +204,13 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
     name: "",
     email: "",
     password: "",
-    role: Role.SALESMAN,
+    role: "SALESMAN",
     phone: "",
   });
 
-  const salesmen = data.users.filter((u) => u.role === Role.SALESMAN && u.active);
+  const salesmen = data.users.filter((u) => u.role === "SALESMAN" && u.active);
   const finishedItems = data.items.filter(
-    (i) => i.category === ItemCategory.FINISHED_GOOD && i.active
+    (i) => i.category === "FINISHED_GOOD" && i.active
   );
 
   const runAction = (fn: () => Promise<{ ok: boolean; error?: string }>, msg: string) => {
@@ -403,8 +404,8 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                 setItemForm({
                   code: "",
                   name: "",
-                  category: ItemCategory.RAW_MATERIAL,
-                  unit: UnitType.KG,
+                  category: "RAW_MATERIAL",
+                  unit: "KG",
                   packWeightGrams: "",
                   unitsPerCarton: "",
                   hsnCode: "",
@@ -529,7 +530,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
               onClick={() => {
                 setCustForm({
                   name: "",
-                  type: CustomerType.RETAILER,
+                  type: "RETAILER",
                   gstin: "",
                   state: "",
                   stateCode: "",
@@ -741,7 +742,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                   name: "",
                   email: "",
                   password: "",
-                  role: Role.SALESMAN,
+                  role: "SALESMAN",
                   phone: "",
                 });
                 setUserDrawerOpen(true);
@@ -865,9 +866,9 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                   })
                 }
               >
-                <option value={ItemCategory.RAW_MATERIAL}>Raw Material</option>
-                <option value={ItemCategory.PACKAGING}>Packaging</option>
-                <option value={ItemCategory.FINISHED_GOOD}>Finished Good</option>
+                <option value="RAW_MATERIAL">Raw Material</option>
+                <option value="PACKAGING">Packaging</option>
+                <option value="FINISHED_GOOD">Finished Good</option>
               </select>
             </div>
             <div className="sm:col-span-2">
@@ -888,7 +889,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                   setItemForm({ ...itemForm, unit: e.target.value as UnitType })
                 }
               >
-                {Object.values(UnitType).map((u) => (
+                {UNIT_TYPES.map((u) => (
                   <option key={u} value={u}>
                     {u}
                   </option>
@@ -1017,8 +1018,8 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                   })
                 }
               >
-                <option value={CustomerType.RETAILER}>Retailer</option>
-                <option value={CustomerType.DISTRIBUTOR}>Distributor</option>
+                <option value="RETAILER">Retailer</option>
+                <option value="DISTRIBUTOR">Distributor</option>
               </select>
             </div>
             <div>
@@ -1354,7 +1355,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                 setUserForm({ ...userForm, role: e.target.value as Role })
               }
             >
-              {Object.values(Role).map((r) => (
+              {USER_ROLES.map((r) => (
                 <option key={r} value={r}>
                   {ROLE_LABELS[r as UserRole]}
                 </option>
