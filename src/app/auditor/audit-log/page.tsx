@@ -1,9 +1,15 @@
+import type { Metadata } from "next";
 import {
   AuditLogClient,
   type AuditLogPageData,
 } from "@/components/auditor/AuditLogClient";
 import { parseDateRangeParams } from "@/lib/engines/reports";
 import { prisma } from "@/lib/prisma";
+
+export const metadata: Metadata = {
+  title: "Audit Trail",
+  description: "Immutable activity log of system actions and overrides.",
+};
 
 export const dynamic = "force-dynamic";
 

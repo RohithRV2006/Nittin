@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import {
   ProductionReportClient,
   type ProductionReportData,
@@ -5,6 +6,11 @@ import {
 import { money, qty } from "@/lib/decimal";
 import { parseDateRangeParams } from "@/lib/engines/reports";
 import { prisma } from "@/lib/prisma";
+
+export const metadata: Metadata = {
+  title: "Production Report",
+  description: "Batch yield variance, scrap analysis, and costing report.",
+};
 
 export const dynamic = "force-dynamic";
 

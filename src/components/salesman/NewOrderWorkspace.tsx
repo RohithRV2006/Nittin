@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { UnitType } from "@prisma/client";
 import { Minus, Plus, Search, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { submitFieldOrderAction } from "@/actions/salesman.actions";
 import { InlineAlert } from "@/components/ui/InlineAlert";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { formatINR, money, toDec } from "@/lib/decimal";
 import { computeGstSplit } from "@/lib/engines/tax";
+import { formatDisplayQty, isIntegerUnit } from "@/lib/enums";
 import {
   enqueueOfflineOrder,
   loadSalesmanCatalogCache,
@@ -71,10 +72,6 @@ export function NewOrderWorkspace({
         ]
       : []
   );
-
-  const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [queuedOfflineMsg, setQueuedOfflineMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (initialData.customers.length > 0 && initialData.products.length > 0) {
@@ -192,19 +189,22 @@ export function NewOrderWorkspace({
       estimatedTotal: summary.total.toFixed(2),
       queuedAt: new Date().toISOString(),
     });
-    setQueuedOfflineMsg(
-      `Saved offline for ${selectedCustomer.name}. It will auto-sync when connection returns.`
+    toast.warning(
+      `Saved offline for ${selectedCustomer.name}. Auto-syncs when online.`,
+      {
+        action: {
+          label: "View Queue",
+          onClick: () => router.push("/salesman/orders"),
+        },
+      }
     );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-    setSuccessMsg(null);
-    setQueuedOfflineMsg(null);
 
     if (!selectedCustomer) {
-      setError("Please select a customer.");
+      toast.error("Please select a customer.");
       return;
     }
 
@@ -232,13 +232,16 @@ export function NewOrderWorkspace({
         });
 
         if (!res.ok) {
-          setError(res.error ?? "Failed to submit order.");
+          toast.error(res.error ?? "Failed to submit order.");
           return;
         }
 
-        setSuccessMsg(
-          `Order ${res.data?.orderNumber ?? ""} submitted to factory!`
-        );
+        toast.success(`Order ${res.data?.orderNumber ?? ""} submitted!`, {
+          action: {
+            label: "Track Orders",
+            onClick: () => router.push("/salesman/orders"),
+          },
+        });
         router.refresh();
       } catch {
         // Network dropped mid-submit: save safely to offline queue
@@ -251,30 +254,8 @@ export function NewOrderWorkspace({
     <div className="space-y-5 pb-36 lg:pb-10">
       <PageHeader
         title="New Field Order"
-        subtitle="Select customer, tap packet quantities, and submit directly to factory"
+        subtitle="Select customer, tap packet counts, and submit to factory"
       />
-
-      {error ? <InlineAlert variant="danger">{error}</InlineAlert> : null}
-      {successMsg ? (
-        <InlineAlert variant="success" title="Order Submitted">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span>{successMsg}</span>
-            <Link href="/salesman/orders" className="font-semibold underline">
-              Track Orders →
-            </Link>
-          </div>
-        </InlineAlert>
-      ) : null}
-      {queuedOfflineMsg ? (
-        <InlineAlert variant="warning" title="Saved in Offline Queue">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span>{queuedOfflineMsg}</span>
-            <Link href="/salesman/orders" className="font-semibold underline">
-              View Queue →
-            </Link>
-          </div>
-        </InlineAlert>
-      ) : null}
 
       {catalog.customers.length === 0 || catalog.products.length === 0 ? (
         <InlineAlert variant="warning" title="Catalog Not Ready">
@@ -283,18 +264,18 @@ export function NewOrderWorkspace({
       ) : (
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* 1. Customer Selection */}
-          <section className="rounded-xl border border-[#E2E8F0] bg-white p-4 sm:p-5">
-            <h2 className="mb-3 text-sm font-semibold text-[#0F172A]">
+          <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 sm:p-5">
+            <h2 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">
               1. Select Customer
             </h2>
             <div className="relative mb-3">
-              <Search className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-[#64748B]" />
+              <Search className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-[var(--text-muted)]" />
               <input
                 type="search"
                 placeholder="Search retailer / distributor..."
                 value={customerSearch}
                 onChange={(e) => setCustomerSearch(e.target.value)}
-                className="h-11 w-full rounded-lg border border-[#CBD5E1] bg-white pr-3 pl-9 text-base outline-none focus:border-[#047857] sm:text-sm"
+                className="h-11 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] pr-3 pl-9 text-base outline-none focus:border-[var(--brand-primary)] sm:text-sm"
               />
             </div>
 
@@ -302,7 +283,7 @@ export function NewOrderWorkspace({
               required
               value={customerId}
               onChange={(e) => setCustomerId(e.target.value)}
-              className="h-11 w-full rounded-lg border border-[#CBD5E1] bg-white px-3 text-base text-[#0F172A] outline-none focus:border-[#047857] sm:text-sm"
+              className="h-11 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-3 text-base text-[var(--text-primary)] outline-none focus:border-[var(--brand-primary)] sm:text-sm"
             >
               {filteredCustomers.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -312,7 +293,7 @@ export function NewOrderWorkspace({
             </select>
 
             {selectedCustomer ? (
-              <p className="mt-2 text-xs text-[#475569]">
+              <p className="mt-2 text-xs text-[var(--text-secondary)]">
                 GSTIN:{" "}
                 <span className="font-mono">
                   {selectedCustomer.gstin ?? "Unregistered"}
@@ -327,9 +308,9 @@ export function NewOrderWorkspace({
           </section>
 
           {/* 2. Products */}
-          <section className="space-y-3 rounded-xl border border-[#E2E8F0] bg-white p-4 sm:p-5">
+          <section className="space-y-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 sm:p-5">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-[#0F172A]">
+              <h2 className="text-sm font-semibold text-[var(--text-primary)]">
                 2. Add Products & Quantities
               </h2>
               <button
@@ -345,7 +326,7 @@ export function NewOrderWorkspace({
                     { itemId: nextProd.id, quantity: "1", inputUnit: nextProd.unit },
                   ]);
                 }}
-                className="min-h-[36px] rounded-lg border border-[#CBD5E1] px-3 text-xs font-semibold text-[#047857] hover:bg-[#ECFDF5]"
+                className="min-h-[36px] rounded-lg border border-[var(--border-strong)] px-3 text-xs font-semibold text-[var(--brand-primary)] hover:bg-[#ECFDF5]"
               >
                 + Add Product
               </button>
@@ -380,7 +361,7 @@ export function NewOrderWorkspace({
                 return (
                   <div
                     key={idx}
-                    className="space-y-3 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-3.5"
+                    className="space-y-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-subtle)] p-3.5"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <select
@@ -399,7 +380,7 @@ export function NewOrderWorkspace({
                             )
                           );
                         }}
-                        className="h-11 flex-1 rounded-lg border border-[#CBD5E1] bg-white px-3 text-base font-medium text-[#0F172A] sm:text-sm"
+                        className="h-11 flex-1 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-3 text-base font-medium text-[var(--text-primary)] sm:text-sm"
                       >
                         {catalog.products.map((p) => (
                           <option key={p.id} value={p.id}>
@@ -414,7 +395,7 @@ export function NewOrderWorkspace({
                             setLines(lines.filter((_, i) => i !== idx))
                           }
                           aria-label="Remove product"
-                          className="flex h-11 w-11 items-center justify-center rounded-lg border border-[#FECACA] bg-white text-[#B91C1C]"
+                          className="flex h-11 w-11 items-center justify-center rounded-lg border border-[#FECACA] bg-[var(--bg-surface)] text-red-700 dark:text-red-400"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -422,11 +403,11 @@ export function NewOrderWorkspace({
                     </div>
 
                     {prod ? (
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#475569]">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-secondary)]">
                         <span>
                           Warehouse Stock:{" "}
-                          <strong className="tabular-nums text-[#0F172A]">
-                            {Number(prod.availableStock).toFixed(0)} {prod.unit}
+                          <strong className="tabular-nums text-[var(--text-primary)]">
+                            {formatDisplayQty(prod.availableStock, prod.unit)} {prod.unit}
                           </strong>
                         </span>
                         <span className="tabular-nums">
@@ -441,15 +422,15 @@ export function NewOrderWorkspace({
                           type="button"
                           onClick={() => adjustQty(idx, -1)}
                           aria-label="Decrease quantity"
-                          className="flex h-11 w-11 items-center justify-center rounded-lg border border-[#CBD5E1] bg-white text-[#0F172A] active:bg-[#F1F5F9]"
+                          className="flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] text-[var(--text-primary)] active:bg-[var(--bg-subtle)]"
                         >
                           <Minus className="h-4 w-4" />
                         </button>
                         <input
                           type="number"
-                          step="1"
-                          min="1"
-                          inputMode="decimal"
+                          step={isIntegerUnit(line.inputUnit) ? "1" : "0.001"}
+                          min={isIntegerUnit(line.inputUnit) ? "1" : "0.001"}
+                          inputMode={isIntegerUnit(line.inputUnit) ? "numeric" : "decimal"}
                           required
                           value={line.quantity}
                           onChange={(e) => {
@@ -459,13 +440,13 @@ export function NewOrderWorkspace({
                               )
                             );
                           }}
-                          className="h-11 w-24 rounded-lg border border-[#CBD5E1] bg-white px-2 text-center text-base font-semibold tabular-nums"
+                          className="h-11 w-24 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-2 text-center text-base font-semibold tabular-nums text-[var(--text-primary)]"
                         />
                         <button
                           type="button"
                           onClick={() => adjustQty(idx, 1)}
                           aria-label="Increase quantity"
-                          className="flex h-11 w-11 items-center justify-center rounded-lg border border-[#CBD5E1] bg-white text-[#0F172A] active:bg-[#F1F5F9]"
+                          className="flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] text-[var(--text-primary)] active:bg-[var(--bg-subtle)]"
                         >
                           <Plus className="h-4 w-4" />
                         </button>
@@ -480,7 +461,7 @@ export function NewOrderWorkspace({
                               )
                             );
                           }}
-                          className="h-11 rounded-lg border border-[#CBD5E1] bg-white px-2.5 text-sm font-medium"
+                          className="h-11 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-2.5 text-sm font-medium"
                         >
                           {unitOpts.map((u) => (
                             <option key={u} value={u}>
@@ -491,8 +472,8 @@ export function NewOrderWorkspace({
                       </div>
 
                       <div className="text-right">
-                        <span className="text-xs text-[#64748B]">Line Taxable</span>
-                        <p className="text-base font-semibold tabular-nums text-[#0F172A]">
+                        <span className="text-xs text-[var(--text-muted)]">Line Taxable</span>
+                        <p className="text-base font-semibold tabular-nums text-[var(--text-primary)]">
                           {formatINR(lineAmount)}
                         </p>
                       </div>
@@ -504,22 +485,22 @@ export function NewOrderWorkspace({
           </section>
 
           {/* 3. Notes */}
-          <section className="rounded-xl border border-[#E2E8F0] bg-white p-4 sm:p-5">
-            <label className="mb-1.5 block text-xs font-medium text-[#475569]">
+          <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 sm:p-5">
+            <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
               Delivery / Dealer Notes (optional)
             </label>
             <input
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="E.g. Evening tempo dispatch, urgent stock..."
-              className="h-11 w-full rounded-lg border border-[#CBD5E1] bg-white px-3 text-base outline-none focus:border-[#047857] sm:text-sm"
+              className="h-11 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-3 text-base outline-none focus:border-[var(--brand-primary)] sm:text-sm"
             />
           </section>
 
           {/* Sticky Bottom Order Summary Bar */}
-          <div className="fixed inset-x-0 bottom-16 z-20 border-t border-[#E2E8F0] bg-white px-4 py-3 shadow-lg lg:static lg:rounded-xl lg:border lg:p-5 lg:shadow-none">
+          <div className="fixed inset-x-0 bottom-16 z-20 border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-3 shadow-lg lg:static lg:rounded-xl lg:border lg:p-5 lg:shadow-none">
             <div className="mx-auto flex max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-xs text-[#475569] tabular-nums">
+              <div className="text-xs text-[var(--text-secondary)] tabular-nums">
                 <div>
                   Taxable: <strong>{formatINR(summary.taxable)}</strong> • GST:{" "}
                   <strong>
@@ -528,14 +509,14 @@ export function NewOrderWorkspace({
                     )}
                   </strong>
                 </div>
-                <div className="text-base font-bold text-[#0F172A]">
+                <div className="text-base font-bold text-[var(--text-primary)]">
                   Est. Grand Total: {formatINR(summary.total)}
                 </div>
               </div>
               <button
                 type="submit"
                 disabled={isPending}
-                className="h-12 w-full rounded-lg bg-[#047857] px-6 text-sm font-semibold text-white hover:bg-[#065F46] disabled:opacity-60 sm:w-auto"
+                className="h-12 w-full rounded-lg bg-[var(--brand-primary)] px-6 text-sm font-semibold text-white hover:bg-[var(--brand-hover)] disabled:opacity-60 sm:w-auto"
               >
                 {isPending ? "Submitting Order..." : "Submit Order to Factory"}
               </button>

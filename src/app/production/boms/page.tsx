@@ -1,8 +1,14 @@
+import type { Metadata } from "next";
 import { ItemCategory } from "@prisma/client";
 import { BomsWorkspace, type BomsPageData } from "@/components/production/BomsWorkspace";
 import { money, toDec } from "@/lib/decimal";
 import { prisma } from "@/lib/prisma";
 import { convertUnit } from "@/lib/units";
+
+export const metadata: Metadata = {
+  title: "Bills of Materials",
+  description: "Configure product recipes, expected yield, and tolerance.",
+};
 
 export const dynamic = "force-dynamic";
 

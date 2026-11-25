@@ -1,4 +1,4 @@
-import Link from "next/link";
+import type { Metadata } from "next";
 import {
   InvoiceStatus,
   ItemCategory,
@@ -11,9 +11,15 @@ import { StatCard } from "@/components/ui/StatCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { formatINR, money, percent, qty } from "@/lib/decimal";
 import { getItemStockMap } from "@/lib/engines/stock";
+import { formatDisplayQty } from "@/lib/enums";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Executive Dashboard",
+  description: "Commercial KPIs, stock health, unit economics, and receivables.",
+};
 
 export default async function OwnerDashboardPage() {
   const startOfDay = new Date();
@@ -138,15 +144,7 @@ export default async function OwnerDashboardPage() {
     <div className="space-y-6">
       <PageHeader
         title="Owner Executive Dashboard"
-        subtitle="Real-time commercial pulse, warehouse stock, production variance alerts, unit economics, and receivables"
-        actions={
-          <Link
-            href="/auditor"
-            className="inline-flex h-10 items-center rounded-lg border border-[#CBD5E1] bg-white px-4 text-sm font-medium text-[#0F172A] hover:bg-[#F1F5F9]"
-          >
-            Audit Reports →
-          </Link>
-        }
+        subtitle="Real-time commercial pulse, stock health, unit economics, and receivables"
       />
 
       {varianceRuns.length > 0 ? (
@@ -192,19 +190,16 @@ export default async function OwnerDashboardPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Finished & Raw Stock Health */}
-        <div className="rounded-xl border border-[#E2E8F0] bg-white p-5">
+        <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[#0F172A]">
-              Inventory Watchlist & Low-Stock Alerts
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+              Inventory Watchlist & Alerts
             </h2>
-            <Link
-              href="/auditor/stock-ledger"
-              className="text-xs font-medium text-[#047857] hover:underline"
-            >
-              Stock Ledger →
-            </Link>
+            <span className="text-xs font-medium text-[var(--text-muted)]">
+              Live Balances
+            </span>
           </div>
-          <div className="mt-3 divide-y divide-[#F1F5F9] text-sm">
+          <div className="mt-3 divide-y divide-[var(--border-default)] text-sm">
             {items.slice(0, 8).map((i) => {
               const bal = stockMap.get(i.id) ?? qty(0);
               const re = qty(i.reorderLevel.toString());
@@ -212,12 +207,12 @@ export default async function OwnerDashboardPage() {
               return (
                 <div key={i.id} className="flex items-center justify-between py-2">
                   <div>
-                    <span className="font-medium text-[#0F172A]">{i.name}</span>{" "}
-                    <span className="font-mono text-xs text-[#64748B]">({i.code})</span>
+                    <span className="font-medium text-[var(--text-primary)]">{i.name}</span>{" "}
+                    <span className="font-mono text-xs text-[var(--text-muted)]">({i.code})</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="tabular-nums font-semibold">
-                      {bal.toFixed(2)} {i.unit}
+                    <span className="tabular-nums font-semibold text-[var(--text-primary)]">
+                      {formatDisplayQty(bal.toString(), i.unit)} {i.unit}
                     </span>
                     {isLow ? (
                       <StatusBadge status="ON_HOLD" customLabel="Low" />
@@ -228,7 +223,7 @@ export default async function OwnerDashboardPage() {
             })}
           </div>
           {expiringBatches.length > 0 ? (
-            <p className="mt-3 text-xs font-medium text-[#B91C1C]">
+            <p className="mt-3 text-xs font-medium text-red-700 dark:text-red-400">
               Expiring within 15 days:{" "}
               {expiringBatches
                 .map((b) => `${b.batchNumber} (${b.item.name})`)
@@ -239,31 +234,28 @@ export default async function OwnerDashboardPage() {
 
         {/* Debtors & Recent Production Economics */}
         <div className="space-y-4">
-          <div className="rounded-xl border border-[#E2E8F0] bg-white p-5">
+          <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-[#0F172A]">
+              <h2 className="text-sm font-semibold text-[var(--text-primary)]">
                 Outstanding Customer Dues
               </h2>
-              <Link
-                href="/auditor/receivables"
-                className="text-xs font-medium text-[#047857] hover:underline"
-              >
-                Ageing Report →
-              </Link>
+              <span className="text-xs font-medium text-[var(--text-muted)]">
+                Top Debtors
+              </span>
             </div>
             {topDebtors.length === 0 ? (
-              <p className="mt-3 text-xs text-[#64748B]">
+              <p className="mt-3 text-xs text-[var(--text-muted)]">
                 No outstanding customer balances.
               </p>
             ) : (
-              <div className="mt-3 divide-y divide-[#F1F5F9] text-sm">
+              <div className="mt-3 divide-y divide-[var(--border-default)] text-sm">
                 {topDebtors.slice(0, 5).map((d) => (
                   <div key={d.id} className="flex items-center justify-between py-2">
-                    <span>
+                    <span className="text-[var(--text-primary)]">
                       {d.name}{" "}
-                      <span className="text-xs text-[#64748B]">({d.state})</span>
+                      <span className="text-xs text-[var(--text-muted)]">({d.state})</span>
                     </span>
-                    <span className="tabular-nums font-semibold text-[#B45309]">
+                    <span className="tabular-nums font-semibold text-amber-700 dark:text-amber-400">
                       {formatINR(d.due)}
                     </span>
                   </div>
@@ -272,34 +264,31 @@ export default async function OwnerDashboardPage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-[#E2E8F0] bg-white p-5">
+          <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-[#0F172A]">
+              <h2 className="text-sm font-semibold text-[var(--text-primary)]">
                 Recent Batch Costing & Variances
               </h2>
-              <Link
-                href="/auditor/production-report"
-                className="text-xs font-medium text-[#047857] hover:underline"
-              >
-                Full Report →
-              </Link>
+              <span className="text-xs font-medium text-[var(--text-muted)]">
+                Latest Runs
+              </span>
             </div>
             {recentRuns.length === 0 ? (
-              <p className="mt-3 text-xs text-[#64748B]">
+              <p className="mt-3 text-xs text-[var(--text-muted)]">
                 No completed production runs yet.
               </p>
             ) : (
-              <div className="mt-3 divide-y divide-[#F1F5F9] text-sm">
+              <div className="mt-3 divide-y divide-[var(--border-default)] text-sm">
                 {recentRuns.slice(0, 4).map((r) => (
                   <div key={r.id} className="flex items-center justify-between py-2">
-                    <div>
+                    <div className="text-[var(--text-primary)]">
                       <span className="font-mono text-xs font-semibold">
                         {r.runNumber}
                       </span>{" "}
                       — {r.bom.finishedItem.name}
                     </div>
                     <div className="flex items-center gap-2 tabular-nums">
-                      <span className="text-xs text-[#475569]">
+                      <span className="text-xs text-[var(--text-secondary)]">
                         {r.costPerPacket ? `${formatINR(r.costPerPacket)}/pkt` : "N/A"}
                       </span>
                       <StatusBadge

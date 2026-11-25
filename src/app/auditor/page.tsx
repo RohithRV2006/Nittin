@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { InvoiceStatus, ProductionRunStatus } from "@prisma/client";
 import {
   AuditorCenterClient,
@@ -6,6 +7,11 @@ import {
 import { money } from "@/lib/decimal";
 import { parseDateRangeParams } from "@/lib/engines/reports";
 import { prisma } from "@/lib/prisma";
+
+export const metadata: Metadata = {
+  title: "Auditor Center",
+  description: "Statutory financial reports, ledgers, and Tally exports.",
+};
 
 export const dynamic = "force-dynamic";
 

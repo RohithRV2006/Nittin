@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { MovementType } from "@prisma/client";
 import {
   AdjustmentsWorkspace,
@@ -6,6 +7,11 @@ import {
 import { money, qty } from "@/lib/decimal";
 import { getItemStockMap } from "@/lib/engines/stock";
 import { prisma } from "@/lib/prisma";
+
+export const metadata: Metadata = {
+  title: "Stock Adjustments",
+  description: "Inspect open batches, expiry alerts, and audited stock adjustments.",
+};
 
 export const dynamic = "force-dynamic";
 

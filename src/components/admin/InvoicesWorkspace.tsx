@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { DispatchStatus, InvoiceStatus, PaymentStatus } from "@prisma/client";
+import { toast } from "sonner";
 import {
   cancelInvoiceWithCreditNoteAction,
   generateMockEInvoiceAction,
@@ -42,10 +43,6 @@ function downloadJsonFile(filename: string, obj: unknown) {
 export function InvoicesWorkspace({ invoices }: { invoices: InvoiceRow[] }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [feedback, setFeedback] = useState<{
-    variant: "success" | "danger";
-    text: string;
-  } | null>(null);
 
   const [cancelTarget, setCancelTarget] = useState<InvoiceRow | null>(null);
   const [cancelReason, setCancelReason] = useState("");
@@ -57,6 +54,12 @@ export function InvoicesWorkspace({ invoices }: { invoices: InvoiceRow[] }) {
     eWayBillJson: unknown;
   } | null>(null);
 
+  const handleDownloadPdf = (inv: InvoiceRow) => {
+    void downloadGstInvoicePdf(inv).catch(() => {
+      toast.error("Failed to generate invoice PDF.");
+    });
+  };
+
   const handleDispatch = (inv: InvoiceRow) => {
     if (
       !window.confirm(
@@ -65,20 +68,16 @@ export function InvoicesWorkspace({ invoices }: { invoices: InvoiceRow[] }) {
     ) {
       return;
     }
-    setFeedback(null);
     startTransition(async () => {
       const res = await recordDispatchAction({
         invoiceId: inv.id,
         preferFefo: true,
       });
       if (!res.ok) {
-        setFeedback({ variant: "danger", text: res.error ?? "Dispatch failed" });
+        toast.error(res.error ?? "Dispatch failed");
         return;
       }
-      setFeedback({
-        variant: "success",
-        text: `Dispatch recorded for ${inv.invoiceNumber}. Finished-goods stock updated.`,
-      });
+      toast.success(`Dispatch recorded for ${inv.invoiceNumber}. Stock updated.`);
       router.refresh();
     });
   };
@@ -86,36 +85,33 @@ export function InvoicesWorkspace({ invoices }: { invoices: InvoiceRow[] }) {
   const handleCancelInvoice = (e: React.FormEvent) => {
     e.preventDefault();
     if (!cancelTarget) return;
-    setFeedback(null);
     startTransition(async () => {
       const res = await cancelInvoiceWithCreditNoteAction({
         invoiceId: cancelTarget.id,
         reason: cancelReason,
       });
       if (!res.ok) {
-        setFeedback({ variant: "danger", text: res.error ?? "Cancellation failed" });
+        toast.error(res.error ?? "Cancellation failed");
         return;
       }
       setCancelTarget(null);
       setCancelReason("");
-      setFeedback({
-        variant: "success",
-        text: `Issued Credit Note ${res.data?.creditNoteNumber ?? ""}. ${
+      toast.success(
+        `Issued Credit Note ${res.data?.creditNoteNumber ?? ""}. ${
           res.data?.restocked
-            ? "Dispatched stock was restocked into Stock Ledger."
-            : "Invoice was not dispatched, so no stock adjustment was needed."
-        }`,
-      });
+            ? "Dispatched stock was restocked."
+            : "No stock adjustment needed."
+        }`
+      );
       router.refresh();
     });
   };
 
   const handleEInvoice = (inv: InvoiceRow) => {
-    setFeedback(null);
     startTransition(async () => {
       const res = await generateMockEInvoiceAction(inv.id);
       if (!res.ok || !res.data) {
-        setFeedback({ variant: "danger", text: res.error ?? "Failed" });
+        toast.error(res.error ?? "Failed to generate e-Invoice");
         return;
       }
       setEInvoicePreview({
@@ -124,6 +120,7 @@ export function InvoicesWorkspace({ invoices }: { invoices: InvoiceRow[] }) {
         eInvoiceJson: res.data.eInvoiceJson,
         eWayBillJson: res.data.eWayBillJson,
       });
+      toast.success(`e-Invoice generated for ${inv.invoiceNumber}.`);
       router.refresh();
     });
   };
@@ -139,13 +136,9 @@ export function InvoicesWorkspace({ invoices }: { invoices: InvoiceRow[] }) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="GST Invoicing & Dispatch Desk"
-        subtitle="Download A4 GST tax invoices, share via WhatsApp, record dispatches, and export e-Invoice / e-Way Bill JSON"
+        title="GST Invoicing & Dispatch"
+        subtitle="Download GST PDFs, share via WhatsApp, dispatch, and export JSON"
       />
-
-      {feedback ? (
-        <InlineAlert variant={feedback.variant}>{feedback.text}</InlineAlert>
-      ) : null}
 
       <ResponsiveTable
         data={invoices}
@@ -162,15 +155,15 @@ export function InvoicesWorkspace({ invoices }: { invoices: InvoiceRow[] }) {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => downloadGstInvoicePdf(r)}
-              className="rounded-lg border border-[#CBD5E1] px-2.5 py-1 text-xs font-medium"
+              onClick={() => handleDownloadPdf(r)}
+              className="rounded-lg border border-[var(--border-strong)] px-2.5 py-1 text-xs font-medium"
             >
               PDF
             </button>
             <button
               type="button"
               onClick={() => openWhatsApp(r)}
-              className="rounded-lg border border-[#CBD5E1] px-2.5 py-1 text-xs font-medium"
+              className="rounded-lg border border-[var(--border-strong)] px-2.5 py-1 text-xs font-medium"
             >
               WhatsApp
             </button>
@@ -178,7 +171,7 @@ export function InvoicesWorkspace({ invoices }: { invoices: InvoiceRow[] }) {
               <button
                 type="button"
                 onClick={() => handleDispatch(r)}
-                className="rounded-lg bg-[#047857] px-2.5 py-1 text-xs font-semibold text-white"
+                className="rounded-lg bg-[var(--brand-primary)] px-2.5 py-1 text-xs font-semibold text-white"
               >
                 Dispatch
               </button>
@@ -193,7 +186,7 @@ export function InvoicesWorkspace({ invoices }: { invoices: InvoiceRow[] }) {
               <div>
                 <span className="font-mono text-xs font-semibold">{r.invoiceNumber}</span>
                 {r.creditNoteNumber ? (
-                  <p className="font-mono text-[10px] text-[#B91C1C]">
+                  <p className="font-mono text-[10px] text-red-700 dark:text-red-400">
                     CN: {r.creditNoteNumber}
                   </p>
                 ) : null}
@@ -249,15 +242,15 @@ export function InvoicesWorkspace({ invoices }: { invoices: InvoiceRow[] }) {
               <div className="flex flex-wrap justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => downloadGstInvoicePdf(r)}
-                  className="text-xs font-medium text-[#047857] hover:underline"
+                  onClick={() => handleDownloadPdf(r)}
+                  className="text-xs font-medium text-[var(--brand-primary)] hover:underline"
                 >
                   PDF
                 </button>
                 <button
                   type="button"
                   onClick={() => openWhatsApp(r)}
-                  className="text-xs font-medium text-[#0369A1] hover:underline"
+                  className="text-xs font-medium text-sky-700 dark:text-sky-400 hover:underline"
                 >
                   WhatsApp
                 </button>
@@ -265,7 +258,7 @@ export function InvoicesWorkspace({ invoices }: { invoices: InvoiceRow[] }) {
                   type="button"
                   disabled={isPending}
                   onClick={() => handleEInvoice(r)}
-                  className="text-xs font-medium text-[#475569] hover:underline"
+                  className="text-xs font-medium text-[var(--text-secondary)] hover:underline"
                 >
                   e-Inv JSON
                 </button>
@@ -274,7 +267,7 @@ export function InvoicesWorkspace({ invoices }: { invoices: InvoiceRow[] }) {
                     type="button"
                     disabled={isPending}
                     onClick={() => handleDispatch(r)}
-                    className="rounded bg-[#047857] px-2 py-0.5 text-xs font-semibold text-white"
+                    className="rounded bg-[var(--brand-primary)] px-2 py-0.5 text-xs font-semibold text-white"
                   >
                     Dispatch
                   </button>
@@ -286,7 +279,7 @@ export function InvoicesWorkspace({ invoices }: { invoices: InvoiceRow[] }) {
                       setCancelTarget(r);
                       setCancelReason("");
                     }}
-                    className="text-xs font-medium text-[#B91C1C] hover:underline"
+                    className="text-xs font-medium text-red-700 dark:text-red-400 hover:underline"
                   >
                     Credit Note
                   </button>
@@ -317,7 +310,7 @@ export function InvoicesWorkspace({ invoices }: { invoices: InvoiceRow[] }) {
             </InlineAlert>
 
             <div>
-              <label className="mb-1 block text-xs font-medium text-[#475569]">
+              <label className="mb-1 block text-xs font-medium text-[var(--text-secondary)]">
                 Mandatory Audit Reason
               </label>
               <textarea
@@ -327,7 +320,7 @@ export function InvoicesWorkspace({ invoices }: { invoices: InvoiceRow[] }) {
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
                 placeholder="Explain why this invoice is being reversed..."
-                className="w-full rounded-lg border border-[#CBD5E1] p-3 text-sm outline-none focus:border-[#047857]"
+                className="w-full rounded-lg border border-[var(--border-strong)] p-3 text-sm outline-none focus:border-[var(--brand-primary)]"
               />
             </div>
 
@@ -351,9 +344,9 @@ export function InvoicesWorkspace({ invoices }: { invoices: InvoiceRow[] }) {
       >
         {eInvoicePreview ? (
           <div className="space-y-4">
-            <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3 text-xs">
-              <p className="font-semibold text-[#0F172A]">Mocked IRN:</p>
-              <p className="mt-1 font-mono break-all text-[#475569]">
+            <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-subtle)] p-3 text-xs">
+              <p className="font-semibold text-[var(--text-primary)]">Mocked IRN:</p>
+              <p className="mt-1 font-mono break-all text-[var(--text-secondary)]">
                 {eInvoicePreview.irn}
               </p>
             </div>
@@ -366,7 +359,7 @@ export function InvoicesWorkspace({ invoices }: { invoices: InvoiceRow[] }) {
                     eInvoicePreview.eInvoiceJson
                   )
                 }
-                className="h-10 rounded-lg bg-[#047857] text-xs font-semibold text-white"
+                className="h-10 rounded-lg bg-[var(--brand-primary)] text-xs font-semibold text-white"
               >
                 Download e-Invoice JSON
               </button>
@@ -378,12 +371,12 @@ export function InvoicesWorkspace({ invoices }: { invoices: InvoiceRow[] }) {
                     eInvoicePreview.eWayBillJson
                   )
                 }
-                className="h-10 rounded-lg border border-[#CBD5E1] bg-white text-xs font-semibold text-[#0F172A]"
+                className="h-10 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] text-xs font-semibold text-[var(--text-primary)]"
               >
                 Download e-Way Bill JSON
               </button>
             </div>
-            <pre className="max-h-96 overflow-auto rounded-lg border border-[#E2E8F0] bg-[#0F172A] p-3 text-[11px] text-[#F8FAFC]">
+            <pre className="max-h-96 overflow-auto rounded-lg border border-[var(--border-default)] bg-[#0F172A] p-3 text-[11px] text-[#F8FAFC]">
               {JSON.stringify(eInvoicePreview.eInvoiceJson, null, 2)}
             </pre>
           </div>

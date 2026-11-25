@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { DispatchStatus, InvoiceStatus, OrderStatus } from "@prisma/client";
 import { InlineAlert } from "@/components/ui/InlineAlert";
@@ -8,6 +9,11 @@ import { getItemStockMap } from "@/lib/engines/stock";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Admin Command Center",
+  description: "Incoming orders, GST billing, dispatch, procurement, and inventory.",
+};
 
 export default async function AdminCommandCenterPage() {
   const startOfDay = new Date();
@@ -65,19 +71,19 @@ export default async function AdminCommandCenterPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Factory Admin Command Center"
-        subtitle="Incoming orders, billing, dispatch, procurement, and inventory health"
+        title="Admin Command Center"
+        subtitle="Orders, billing, dispatch, procurement, and stock"
         actions={
           <div className="flex flex-wrap gap-2">
             <Link
               href="/admin/orders"
-              className="inline-flex h-10 items-center rounded-lg bg-[#047857] px-3.5 text-sm font-semibold text-white hover:bg-[#065F46]"
+              className="inline-flex h-10 items-center rounded-lg bg-[var(--brand-primary)] px-3.5 text-sm font-semibold text-white hover:bg-[var(--brand-hover)]"
             >
               Incoming Orders
             </Link>
             <Link
               href="/admin/purchases"
-              className="inline-flex h-10 items-center rounded-lg border border-[#CBD5E1] bg-white px-3.5 text-sm font-medium text-[#0F172A] hover:bg-[#F1F5F9]"
+              className="inline-flex h-10 items-center rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-3.5 text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--bg-subtle)]"
             >
               + Record Purchase
             </Link>
@@ -126,21 +132,21 @@ export default async function AdminCommandCenterPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-[#E2E8F0] bg-white p-5">
+        <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[#0F172A]">
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">
               Orders Awaiting Verification
             </h2>
-            <Link href="/admin/orders" className="text-xs font-medium text-[#047857] hover:underline">
+            <Link href="/admin/orders" className="text-xs font-medium text-[var(--brand-primary)] hover:underline">
               View All →
             </Link>
           </div>
           {pendingOrders.length === 0 ? (
-            <p className="mt-3 text-xs text-[#64748B]">All incoming orders are processed.</p>
+            <p className="mt-3 text-xs text-[var(--text-muted)]">All incoming orders are processed.</p>
           ) : (
-            <ul className="mt-3 divide-y divide-[#F1F5F9] text-sm">
+            <ul className="mt-3 divide-y divide-[var(--border-default)] text-sm">
               {pendingOrders.map((o) => (
-                <li key={o.id} className="flex items-center justify-between py-2">
+                <li key={o.id} className="flex items-center justify-between py-2 text-[var(--text-primary)]">
                   <span>
                     <span className="font-mono text-xs font-semibold">{o.orderNumber}</span>{" "}
                     — {o.customer.name}
@@ -154,21 +160,21 @@ export default async function AdminCommandCenterPage() {
           )}
         </div>
 
-        <div className="rounded-xl border border-[#E2E8F0] bg-white p-5">
+        <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[#0F172A]">
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">
               Invoices Awaiting Dispatch
             </h2>
-            <Link href="/admin/invoices" className="text-xs font-medium text-[#047857] hover:underline">
+            <Link href="/admin/invoices" className="text-xs font-medium text-[var(--brand-primary)] hover:underline">
               Dispatch Desk →
             </Link>
           </div>
           {pendingDispatches.length === 0 ? (
-            <p className="mt-3 text-xs text-[#64748B]">No pending dispatches.</p>
+            <p className="mt-3 text-xs text-[var(--text-muted)]">No pending dispatches.</p>
           ) : (
-            <ul className="mt-3 divide-y divide-[#F1F5F9] text-sm">
+            <ul className="mt-3 divide-y divide-[var(--border-default)] text-sm">
               {pendingDispatches.map((inv) => (
-                <li key={inv.id} className="flex items-center justify-between py-2">
+                <li key={inv.id} className="flex items-center justify-between py-2 text-[var(--text-primary)]">
                   <span>
                     <span className="font-mono text-xs font-semibold">{inv.invoiceNumber}</span>{" "}
                     — {inv.customer.name}
@@ -183,29 +189,29 @@ export default async function AdminCommandCenterPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-[#E2E8F0] bg-white p-5">
-        <h2 className="text-sm font-semibold text-[#0F172A]">Recent Audit Activity</h2>
+      <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)]">Recent Audit Activity</h2>
         {recentAudits.length === 0 ? (
-          <p className="mt-2 text-xs text-[#64748B]">
+          <p className="mt-2 text-xs text-[var(--text-muted)]">
             No actions logged yet.
           </p>
         ) : (
-          <ul className="mt-3 divide-y divide-[#F1F5F9] text-sm">
+          <ul className="mt-3 divide-y divide-[var(--border-default)] text-sm">
             {recentAudits.map((a) => (
               <li
                 key={a.id}
                 className="flex flex-wrap items-center justify-between gap-2 py-2.5"
               >
                 <div>
-                  <span className="font-medium text-[#0F172A]">{a.user.name}</span>{" "}
-                  <span className="text-[#475569]">
+                  <span className="font-medium text-[var(--text-primary)]">{a.user.name}</span>{" "}
+                  <span className="text-[var(--text-secondary)]">
                     {a.action.toLowerCase()}d {a.entityType}
                   </span>
                   {a.reason ? (
-                    <span className="text-xs text-[#64748B]"> — {a.reason}</span>
+                    <span className="text-xs text-[var(--text-muted)]"> — {a.reason}</span>
                   ) : null}
                 </div>
-                <span className="font-mono text-xs text-[#64748B]">
+                <span className="font-mono text-xs text-[var(--text-muted)]">
                   {a.createdAt.toISOString().replace("T", " ").slice(0, 16)}
                 </span>
               </li>

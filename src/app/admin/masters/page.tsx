@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { MastersWorkspace, type MastersData } from "@/components/admin/MastersWorkspace";
+
+export const metadata: Metadata = {
+  title: "Masters & Settings",
+  description: "Manage GST profile, SKUs, customers, suppliers, and users.",
+};
 
 export const dynamic = "force-dynamic";
 

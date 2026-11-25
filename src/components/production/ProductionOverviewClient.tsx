@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ProductionRunStatus } from "@prisma/client";
+import { toast } from "sonner";
 import { cancelProductionRunAction } from "@/actions/production.actions";
 import { InlineAlert } from "@/components/ui/InlineAlert";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -71,30 +72,23 @@ export function ProductionOverviewClient({
     runNumber: string;
   } | null>(null);
   const [cancelReason, setCancelReason] = useState("");
-  const [feedback, setFeedback] = useState<{
-    variant: "success" | "danger";
-    text: string;
-  } | null>(null);
 
   const handleCancel = (e: React.FormEvent) => {
     e.preventDefault();
     if (!cancelRun) return;
-    setFeedback(null);
     startTransition(async () => {
       const res = await cancelProductionRunAction({
         runId: cancelRun.id,
         reason: cancelReason,
       });
       if (!res.ok) {
-        setFeedback({ variant: "danger", text: res.error ?? "Cancellation failed" });
+        toast.error(res.error ?? "Cancellation failed");
         return;
       }
+      const num = cancelRun.runNumber;
       setCancelRun(null);
       setCancelReason("");
-      setFeedback({
-        variant: "success",
-        text: `Run ${cancelRun.runNumber} cancelled and issued materials returned to stock.`,
-      });
+      toast.success(`Run ${num} cancelled and materials returned to stock.`);
       router.refresh();
     });
   };
@@ -102,29 +96,25 @@ export function ProductionOverviewClient({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Production Floor Overview"
-        subtitle="BOM recipes, batch run planning, and tolerance alerts"
+        title="Production Floor"
+        subtitle="BOM planning, daily batch runs, and variance alerts"
         actions={
           <div className="flex flex-wrap gap-2">
             <Link
               href="/production/boms"
-              className="inline-flex min-h-[40px] items-center rounded-lg border border-[#CBD5E1] bg-white px-4 text-sm font-medium text-[#0F172A] hover:bg-[#F1F5F9]"
+              className="inline-flex min-h-[40px] items-center rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-4 text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--bg-subtle)]"
             >
               Manage BOMs
             </Link>
             <Link
               href="/production/new-run"
-              className="inline-flex min-h-[40px] items-center rounded-lg bg-[#047857] px-4 text-sm font-semibold text-white hover:bg-[#065F46]"
+              className="inline-flex min-h-[40px] items-center rounded-lg bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white hover:bg-[var(--brand-hover)]"
             >
               + Start Production Run
             </Link>
           </div>
         }
       />
-
-      {feedback ? (
-        <InlineAlert variant={feedback.variant}>{feedback.text}</InlineAlert>
-      ) : null}
 
       {data.recentVarianceAlerts.length > 0 ? (
         <InlineAlert
@@ -155,32 +145,31 @@ export function ProductionOverviewClient({
         />
       </div>
 
-      {/* Production Requirement Planner */}
       {data.recommendations.length > 0 ? (
-        <div className="rounded-xl border border-[#E2E8F0] bg-white p-5">
-          <h2 className="text-sm font-semibold text-[#0F172A]">
-            Production Requirement Planner (Pending Orders vs. Finished Stock)
+        <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+            Production Requirement Planner
           </h2>
           <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
             {data.recommendations.map((rec) => (
               <div
                 key={rec.bomId}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#FDE68A] bg-[#FFFBEB] p-3.5"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#FDE68A] bg-[#FFFBEB] p-3.5 dark:border-[#92400E] dark:bg-[#451A03]/40"
               >
                 <div>
-                  <p className="text-sm font-semibold text-[#0F172A]">
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">
                     {rec.productName}
                   </p>
-                  <p className="mt-0.5 text-xs text-[#475569] tabular-nums">
-                    Pending: {rec.pendingQty} • In Stock: {rec.availableStock} •{" "}
-                    <strong className="text-[#B45309]">
+                  <p className="mt-0.5 text-xs text-[var(--text-secondary)] tabular-nums">
+                    Pending: {rec.pendingQty} • Stock: {rec.availableStock} •{" "}
+                    <strong className="text-[#B45309] dark:text-[#FBBF24]">
                       Deficit: {rec.deficit}
                     </strong>
                   </p>
                 </div>
                 <Link
                   href={`/production/new-run?bomId=${rec.bomId}&multiplier=${rec.recommendedBatches}`}
-                  className="inline-flex min-h-[38px] items-center rounded-lg bg-[#047857] px-3 text-xs font-semibold text-white hover:bg-[#065F46]"
+                  className="inline-flex min-h-[38px] items-center rounded-lg bg-[var(--brand-primary)] px-3 text-xs font-semibold text-white hover:bg-[var(--brand-hover)]"
                 >
                   Run {rec.recommendedBatches} Batch(es) →
                 </Link>
@@ -190,11 +179,10 @@ export function ProductionOverviewClient({
         </div>
       ) : null}
 
-      {/* Active In-Progress Runs */}
       {data.inProgressRuns.length > 0 ? (
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-[#0F172A]">
-            In-Progress Batch Runs (Awaiting Output Completion)
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+            In-Progress Batch Runs
           </h2>
           <ResponsiveTable
             data={data.inProgressRuns}
@@ -205,7 +193,7 @@ export function ProductionOverviewClient({
               <>
                 <Link
                   href={`/production/new-run?runId=${r.id}`}
-                  className="rounded-lg bg-[#047857] px-3 py-1.5 text-xs font-semibold text-white"
+                  className="rounded-lg bg-[var(--brand-primary)] px-3 py-1.5 text-xs font-semibold text-white"
                 >
                   Complete Run
                 </Link>
@@ -230,9 +218,9 @@ export function ProductionOverviewClient({
               { key: "date", header: "Started", render: (r) => r.runDate },
               {
                 key: "planned",
-                header: "Expected Output",
+                header: "Expected",
                 align: "right",
-                render: (r) => `${r.plannedOutput} ${r.unit}`,
+                render: (r) => `${Number(r.plannedOutput).toFixed(0)} ${r.unit}`,
               },
               {
                 key: "cost",
@@ -248,7 +236,7 @@ export function ProductionOverviewClient({
                   <div className="flex justify-end gap-3">
                     <Link
                       href={`/production/new-run?runId=${r.id}`}
-                      className="text-xs font-semibold text-[#047857] hover:underline"
+                      className="text-xs font-semibold text-[var(--brand-primary)] hover:underline"
                     >
                       Complete Run
                     </Link>
@@ -269,21 +257,20 @@ export function ProductionOverviewClient({
         </div>
       ) : null}
 
-      {/* Recent Runs History */}
       <div className="space-y-3">
-        <h2 className="text-sm font-semibold text-[#0F172A]">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)]">
           Recent Production Runs
         </h2>
         <ResponsiveTable
           data={data.recentRuns}
           keyExtractor={(r) => r.id}
           emptyTitle="No production runs logged yet"
-          emptyDescription="Start a daily batch run against a BOM recipe to track yield, variance, and cost per packet."
+          emptyDescription="Start a batch run to track yield and cost."
           mobileTitle={(r) => `${r.runNumber} — ${r.productName}`}
           mobileSubtitle={(r) => (
             <StatusBadge
               status={r.varianceFlagged ? "FLAGGED" : r.status}
-              customLabel={r.varianceFlagged ? "Variance Flagged" : undefined}
+              customLabel={r.varianceFlagged ? "Variance Alert" : undefined}
             />
           )}
           columns={[
@@ -309,7 +296,9 @@ export function ProductionOverviewClient({
               render: (r) => (
                 <span
                   className={
-                    r.varianceFlagged ? "font-semibold text-[#B91C1C]" : "text-[#15803D]"
+                    r.varianceFlagged
+                      ? "font-semibold text-[#B91C1C] dark:text-[#F87171]"
+                      : "text-[#15803D] dark:text-[#4ADE80]"
                   }
                 >
                   {r.yieldVariancePercent}%
@@ -321,7 +310,7 @@ export function ProductionOverviewClient({
               header: "Cost / Pkt",
               align: "right",
               render: (r) =>
-                r.costPerPacket ? formatINR(r.costPerPacket) : "N/A (0 yield)",
+                r.costPerPacket ? formatINR(r.costPerPacket) : "N/A",
             },
             {
               key: "status",
@@ -337,23 +326,22 @@ export function ProductionOverviewClient({
         />
       </div>
 
-      {/* Cancel In-Progress Run Drawer */}
       <SlideOverDrawer
         open={Boolean(cancelRun)}
         onClose={() => setCancelRun(null)}
-        title={`Cancel Production Run — ${cancelRun?.runNumber ?? ""}`}
-        subtitle="Returns all issued raw materials back to FIFO Stock Batches"
+        title={`Cancel Run — ${cancelRun?.runNumber ?? ""}`}
+        subtitle="Returns issued raw materials back to stock"
       >
         <form onSubmit={handleCancel} className="space-y-4">
           <div>
-            <label className="mb-1 block text-xs font-medium text-[#475569]">
-              Mandatory Cancellation Reason
+            <label className="mb-1 block text-xs font-medium text-[var(--text-secondary)]">
+              Cancellation Reason
             </label>
             <textarea
               rows={3}
               required
               minLength={5}
-              className="w-full rounded-lg border border-[#CBD5E1] bg-white p-3 text-sm outline-none focus:border-[#047857]"
+              className="w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] p-3 text-sm outline-none focus:border-[var(--brand-primary)]"
               placeholder="Explain why this batch run was aborted..."
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}

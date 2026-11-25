@@ -107,7 +107,7 @@ export function ReceivablesClient({ data }: { data: ReceivablesPageData }) {
             }}
             onPdf={() => {
               const e = getExport();
-              downloadReportPdf(
+              void downloadReportPdf(
                 `${e.filename}.pdf`,
                 e.title,
                 `As of ${data.to}`,
@@ -125,8 +125,8 @@ export function ReceivablesClient({ data }: { data: ReceivablesPageData }) {
           onClick={() => setTab("ageing")}
           className={`h-9 rounded-lg px-3.5 text-xs font-medium ${
             tab === "ageing"
-              ? "bg-[#047857] text-white"
-              : "border border-[#E2E8F0] bg-white text-[#475569]"
+              ? "bg-[var(--brand-primary)] text-white"
+              : "border border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
           }`}
         >
           Debtors Ageing ({data.debtors.length})
@@ -136,8 +136,8 @@ export function ReceivablesClient({ data }: { data: ReceivablesPageData }) {
           onClick={() => setTab("collections")}
           className={`h-9 rounded-lg px-3.5 text-xs font-medium ${
             tab === "collections"
-              ? "bg-[#047857] text-white"
-              : "border border-[#E2E8F0] bg-white text-[#475569]"
+              ? "bg-[var(--brand-primary)] text-white"
+              : "border border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
           }`}
         >
           Collections Register ({data.payments.length})
@@ -170,7 +170,7 @@ export function ReceivablesClient({ data }: { data: ReceivablesPageData }) {
               header: "Outstanding",
               align: "right",
               render: (r) => (
-                <strong className="text-[#B45309]">{formatINR(r.outstanding)}</strong>
+                <strong className="text-amber-700 dark:text-amber-400">{formatINR(r.outstanding)}</strong>
               ),
             },
             {

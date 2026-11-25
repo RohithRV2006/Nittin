@@ -99,7 +99,7 @@ export function ProductionReportClient({
               )
             }
             onPdf={() =>
-              downloadReportPdf(
+              void downloadReportPdf(
                 `Production-Report-${data.from}-to-${data.to}.pdf`,
                 "Production Variance & Costing Report",
                 `Period: ${data.from} to ${data.to}`,
@@ -143,7 +143,7 @@ export function ProductionReportClient({
             render: (r) => (
               <span
                 className={
-                  r.varianceFlagged ? "font-semibold text-[#B91C1C]" : "text-[#15803D]"
+                  r.varianceFlagged ? "font-semibold text-red-700 dark:text-red-400" : "text-[#15803D]"
                 }
               >
                 {r.yieldVariancePercent}%
@@ -154,7 +154,7 @@ export function ProductionReportClient({
             key: "cons",
             header: "Material Usage & Variances",
             render: (r) => (
-              <span className="text-xs text-[#475569]">{r.consumptionsSummary}</span>
+              <span className="text-xs text-[var(--text-secondary)]">{r.consumptionsSummary}</span>
             ),
           },
           {

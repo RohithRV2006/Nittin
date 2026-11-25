@@ -4,6 +4,13 @@
   "description": "Order-to-Audit Manufacturing ERP",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f8fafc",
-  "theme_color": "#047857"
+  "background_color": "#faf6ee",
+  "theme_color": "#78350f",
+  "icons": [
+    {
+      "src": "/nittin.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
 }

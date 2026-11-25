@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { OrderStatus } from "@prisma/client";
 import { Search } from "lucide-react";
+import { toast } from "sonner";
 import {
   approveAndInvoiceOrderAction,
   holdOrderAction,
@@ -16,6 +17,7 @@ import { SlideOverDrawer } from "@/components/ui/SlideOverDrawer";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { formatINR, money, qty } from "@/lib/decimal";
 import { computeGstSplit } from "@/lib/engines/tax";
+import { formatDisplayQty, isIntegerUnit } from "@/lib/enums";
 
 export interface AdminOrderRow {
   id: string;
@@ -52,17 +54,13 @@ export interface OrdersPageData {
 type StatusFilter = "ALL" | "PENDING" | "ON_HOLD" | "INVOICED" | "DISPATCHED" | "REJECTED";
 
 const inputCls =
-  "h-10 w-full rounded-lg border border-[#CBD5E1] bg-white px-3 text-sm text-[#0F172A] outline-none focus:border-[#047857]";
+  "h-10 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--brand-primary)]";
 
 export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [filter, setFilter] = useState<StatusFilter>("ALL");
   const [search, setSearch] = useState("");
-  const [feedback, setFeedback] = useState<{
-    variant: "success" | "danger";
-    text: string;
-  } | null>(null);
 
   const [selected, setSelected] = useState<AdminOrderRow | null>(null);
   const [draftItems, setDraftItems] = useState<
@@ -103,7 +101,6 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
     );
     setRejectMode(false);
     setRejectReason("");
-    setFeedback(null);
   };
 
   const verificationPreview = useMemo(() => {
@@ -151,21 +148,19 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
 
   const handleApproveAndInvoice = () => {
     if (!selected) return;
-    setFeedback(null);
     startTransition(async () => {
       const res = await approveAndInvoiceOrderAction({
         orderId: selected.id,
         items: draftItems,
       });
       if (!res.ok) {
-        setFeedback({ variant: "danger", text: res.error ?? "Approval failed" });
+        toast.error(res.error ?? "Approval failed");
         return;
       }
       setSelected(null);
-      setFeedback({
-        variant: "success",
-        text: `Generated GST Invoice ${res.data?.invoiceNumber ?? ""}. Ready for PDF/Dispatch under Invoices.`,
-      });
+      toast.success(
+        `Generated GST Invoice ${res.data?.invoiceNumber ?? ""}. Ready for PDF/Dispatch.`
+      );
       router.refresh();
     });
   };
@@ -175,14 +170,11 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
     startTransition(async () => {
       const res = await holdOrderAction({ orderId: selected.id });
       if (!res.ok) {
-        setFeedback({ variant: "danger", text: res.error ?? "Hold failed" });
+        toast.error(res.error ?? "Hold failed");
         return;
       }
       setSelected(null);
-      setFeedback({
-        variant: "success",
-        text: `Order ${selected.orderNumber} placed On Hold for production replenishment.`,
-      });
+      toast.success(`Order ${selected.orderNumber} placed On Hold.`);
       router.refresh();
     });
   };
@@ -196,14 +188,11 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
         reason: rejectReason,
       });
       if (!res.ok) {
-        setFeedback({ variant: "danger", text: res.error ?? "Rejection failed" });
+        toast.error(res.error ?? "Rejection failed");
         return;
       }
       setSelected(null);
-      setFeedback({
-        variant: "success",
-        text: `Order ${selected.orderNumber} rejected.`,
-      });
+      toast.success(`Order ${selected.orderNumber} rejected.`);
       router.refresh();
     });
   };
@@ -215,7 +204,7 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
     <div className="space-y-6">
       <PageHeader
         title="Incoming Order Verification"
-        subtitle="Verify finished stock sufficiency, adjust quantities/prices if needed, and raise GST tax invoices"
+        subtitle="Check stock, adjust lines if needed, and issue GST invoices"
       />
 
       {!data.factoryConfigured ? (
@@ -224,19 +213,15 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
         </InlineAlert>
       ) : null}
 
-      {feedback ? (
-        <InlineAlert variant={feedback.variant}>{feedback.text}</InlineAlert>
-      ) : null}
-
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1 sm:max-w-xs">
-          <Search className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-[#64748B]" />
+          <Search className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-[var(--text-muted)]" />
           <input
             type="search"
             placeholder="Search order #, customer, salesman..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-full rounded-lg border border-[#CBD5E1] bg-white pr-3 pl-9 text-sm outline-none focus:border-[#047857]"
+            className="h-10 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] pr-3 pl-9 text-sm outline-none focus:border-[var(--brand-primary)]"
           />
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -256,8 +241,8 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
               onClick={() => setFilter(key)}
               className={`min-h-[34px] rounded-full px-3 text-xs font-medium ${
                 filter === key
-                  ? "bg-[#047857] text-white"
-                  : "border border-[#E2E8F0] bg-white text-[#475569]"
+                  ? "bg-[var(--brand-primary)] text-white"
+                  : "border border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
               }`}
             >
               {label}
@@ -278,7 +263,7 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
             <button
               type="button"
               onClick={() => openVerify(r)}
-              className="rounded-lg bg-[#047857] px-3 py-1.5 text-xs font-semibold text-white"
+              className="rounded-lg bg-[var(--brand-primary)] px-3 py-1.5 text-xs font-semibold text-white"
             >
               Verify & Process
             </button>
@@ -327,12 +312,12 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
                 <button
                   type="button"
                   onClick={() => openVerify(r)}
-                  className="rounded-lg bg-[#047857] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#065F46]"
+                  className="rounded-lg bg-[var(--brand-primary)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--brand-hover)]"
                 >
                   Verify & Process
                 </button>
               ) : (
-                <span className="font-mono text-xs text-[#64748B]">
+                <span className="font-mono text-xs text-[var(--text-muted)]">
                   {r.invoiceNumber ?? "—"}
                 </span>
               ),
@@ -375,20 +360,20 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
                       key={item.orderItemId}
                       className={`rounded-lg border p-3 ${
                         deficit.gt(0)
-                          ? "border-[#FECACA] bg-[#FEF2F2]/50"
-                          : "border-[#E2E8F0] bg-[#F8FAFC]"
+                          ? "border-red-300 bg-red-50/50 dark:border-red-900/60 dark:bg-red-950/30"
+                          : "border-[var(--border-default)] bg-[var(--bg-subtle)]"
                       }`}
                     >
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <div>
-                          <p className="text-sm font-semibold text-[#0F172A]">
+                          <p className="text-sm font-semibold text-[var(--text-primary)]">
                             {item.itemName}
                           </p>
-                          <p className="text-xs text-[#475569] tabular-nums">
-                            Available: <strong>{avail.toFixed(0)} {item.unit}</strong>
+                          <p className="text-xs text-[var(--text-secondary)] tabular-nums">
+                            Available: <strong>{formatDisplayQty(avail.toString(), item.unit)} {item.unit}</strong>
                             {deficit.gt(0) ? (
-                              <span className="ml-2 font-semibold text-[#B91C1C]">
-                                (Shortage of {deficit.toFixed(0)} {item.unit})
+                              <span className="ml-2 font-semibold text-red-700 dark:text-red-400">
+                                (Shortage of {formatDisplayQty(deficit.toString(), item.unit)} {item.unit})
                               </span>
                             ) : null}
                           </p>
@@ -400,13 +385,14 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
 
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="mb-1 block text-xs text-[#475569]">
+                          <label className="mb-1 block text-xs text-[var(--text-secondary)]">
                             Qty ({item.unit})
                           </label>
                           <input
                             type="number"
-                            step="1"
-                            min="1"
+                            step={isIntegerUnit(item.unit) ? "1" : "0.001"}
+                            min={isIntegerUnit(item.unit) ? "1" : "0.001"}
+                            inputMode={isIntegerUnit(item.unit) ? "numeric" : "decimal"}
                             className={`${inputCls} tabular-nums`}
                             value={d?.quantity ?? ""}
                             onChange={(e) =>
@@ -421,7 +407,7 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
                           />
                         </div>
                         <div>
-                          <label className="mb-1 block text-xs text-[#475569]">
+                          <label className="mb-1 block text-xs text-[var(--text-secondary)]">
                             Unit Price (₹)
                           </label>
                           <input
@@ -448,22 +434,22 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
               )}
             </div>
 
-            <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3.5 text-sm">
+            <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-subtle)] p-3.5 text-sm">
               <div className="flex justify-between">
-                <span className="text-[#475569]">Taxable Value</span>
+                <span className="text-[var(--text-secondary)]">Taxable Value</span>
                 <span className="tabular-nums font-medium">
                   {formatINR(verificationPreview.taxable)}
                 </span>
               </div>
               {verificationPreview.isIntraState ? (
                 <>
-                  <div className="mt-1 flex justify-between text-xs text-[#475569]">
+                  <div className="mt-1 flex justify-between text-xs text-[var(--text-secondary)]">
                     <span>CGST (Intra-State)</span>
                     <span className="tabular-nums">
                       {formatINR(verificationPreview.cgst)}
                     </span>
                   </div>
-                  <div className="mt-1 flex justify-between text-xs text-[#475569]">
+                  <div className="mt-1 flex justify-between text-xs text-[var(--text-secondary)]">
                     <span>SGST (Intra-State)</span>
                     <span className="tabular-nums">
                       {formatINR(verificationPreview.sgst)}
@@ -471,14 +457,14 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
                   </div>
                 </>
               ) : (
-                <div className="mt-1 flex justify-between text-xs text-[#475569]">
+                <div className="mt-1 flex justify-between text-xs text-[var(--text-secondary)]">
                   <span>IGST (Inter-State)</span>
                   <span className="tabular-nums">
                     {formatINR(verificationPreview.igst)}
                   </span>
                 </div>
               )}
-              <div className="mt-2 flex justify-between border-t border-[#E2E8F0] pt-2 text-base font-semibold">
+              <div className="mt-2 flex justify-between border-t border-[var(--border-default)] pt-2 text-base font-semibold">
                 <span>Invoice Total</span>
                 <span className="tabular-nums">
                   {formatINR(verificationPreview.total)}
@@ -487,13 +473,13 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
             </div>
 
             {selected.notes ? (
-              <p className="text-xs text-[#475569]">
+              <p className="text-xs text-[var(--text-secondary)]">
                 <strong>Salesman Notes:</strong> {selected.notes}
               </p>
             ) : null}
 
             {rejectMode ? (
-              <form onSubmit={handleReject} className="space-y-3 border-t border-[#E2E8F0] pt-3">
+              <form onSubmit={handleReject} className="space-y-3 border-t border-[var(--border-default)] pt-3">
                 <textarea
                   rows={2}
                   required
@@ -501,7 +487,7 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
                   placeholder="Reason for rejecting this order..."
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
-                  className="w-full rounded-lg border border-[#CBD5E1] p-2.5 text-sm outline-none"
+                  className="w-full rounded-lg border border-[var(--border-strong)] p-2.5 text-sm outline-none"
                 />
                 <div className="flex gap-2">
                   <button
@@ -514,7 +500,7 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
                   <button
                     type="button"
                     onClick={() => setRejectMode(false)}
-                    className="h-10 rounded-lg border border-[#CBD5E1] px-4 text-sm"
+                    className="h-10 rounded-lg border border-[var(--border-strong)] px-4 text-sm"
                   >
                     Back
                   </button>
@@ -530,7 +516,7 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
                     !data.factoryConfigured
                   }
                   onClick={handleApproveAndInvoice}
-                  className="h-11 w-full rounded-lg bg-[#047857] text-sm font-semibold text-white hover:bg-[#065F46] disabled:opacity-50"
+                  className="h-11 w-full rounded-lg bg-[var(--brand-primary)] text-sm font-semibold text-white hover:bg-[var(--brand-hover)] disabled:opacity-50"
                 >
                   {isPending
                     ? "Generating Invoice..."
@@ -541,7 +527,7 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
                     type="button"
                     disabled={isPending}
                     onClick={handleHold}
-                    className="h-10 rounded-lg border border-[#FDE68A] bg-[#FFFBEB] text-xs font-semibold text-[#B45309]"
+                    className="h-10 rounded-lg border border-[#FDE68A] bg-[#FFFBEB] text-xs font-semibold text-amber-700 dark:text-amber-400"
                   >
                     Place On Hold
                   </button>
@@ -549,7 +535,7 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
                     type="button"
                     disabled={isPending}
                     onClick={() => setRejectMode(true)}
-                    className="h-10 rounded-lg border border-[#FECACA] bg-[#FEF2F2] text-xs font-semibold text-[#B91C1C]"
+                    className="h-10 rounded-lg border border-[#FECACA] bg-[#FEF2F2] text-xs font-semibold text-red-700 dark:text-red-400"
                   >
                     Reject Order
                   </button>

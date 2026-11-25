@@ -11,10 +11,10 @@ interface StatCardProps {
 }
 
 const TONE_CLASSES: Record<Tone, string> = {
-  default: "text-[#0F172A]",
-  success: "text-[#15803D]",
-  warning: "text-[#B45309]",
-  danger: "text-[#B91C1C]",
+  default: "text-[var(--text-primary)]",
+  success: "text-[#15803D] dark:text-[#4ADE80]",
+  warning: "text-[#B45309] dark:text-[#FBBF24]",
+  danger: "text-[#B91C1C] dark:text-[#F87171]",
 };
 
 export function StatCard({
@@ -25,12 +25,12 @@ export function StatCard({
   icon,
 }: StatCardProps) {
   return (
-    <div className="rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-5">
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 shadow-[0_1px_2px_rgba(35,23,15,0.05)] sm:p-5">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium uppercase tracking-wider text-[#64748B]">
+        <span className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
           {label}
         </span>
-        {icon ? <span className="text-[#64748B]">{icon}</span> : null}
+        {icon ? <span className="text-[var(--text-muted)]">{icon}</span> : null}
       </div>
       <div
         className={`mt-2 text-2xl font-semibold tracking-tight tabular-nums ${TONE_CLASSES[tone]}`}
@@ -38,7 +38,7 @@ export function StatCard({
         {value}
       </div>
       {sublabel ? (
-        <p className="mt-1 text-xs text-[#475569]">{sublabel}</p>
+        <p className="mt-1 text-xs text-[var(--text-secondary)]">{sublabel}</p>
       ) : null}
     </div>
   );

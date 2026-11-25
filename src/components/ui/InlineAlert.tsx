@@ -4,10 +4,13 @@ import type { ReactNode } from "react";
 type AlertVariant = "info" | "success" | "warning" | "danger";
 
 const STYLES: Record<AlertVariant, string> = {
-  info: "border-[#BAE6FD] bg-[#F0F9FF] text-[#0369A1]",
-  success: "border-[#BBF7D0] bg-[#F0FDF4] text-[#15803D]",
-  warning: "border-[#FDE68A] bg-[#FFFBEB] text-[#B45309]",
-  danger: "border-[#FECACA] bg-[#FEF2F2] text-[#B91C1C]",
+  info: "border-[#FDE68A] bg-[#FFFBEB] text-[#78350F] dark:border-[#92400E] dark:bg-[#2B1907] dark:text-[#FDE68A]",
+  success:
+    "border-[#BBF7D0] bg-[#F0FDF4] text-[#15803D] dark:border-[#166534] dark:bg-[#052E16] dark:text-[#86EFAC]",
+  warning:
+    "border-[#FDE68A] bg-[#FFFBEB] text-[#B45309] dark:border-[#92400E] dark:bg-[#451A03] dark:text-[#FCD34D]",
+  danger:
+    "border-[#FECACA] bg-[#FEF2F2] text-[#B91C1C] dark:border-[#991B1B] dark:bg-[#450A0A] dark:text-[#FCA5A5]",
 };
 
 const ICONS: Record<AlertVariant, typeof Info> = {

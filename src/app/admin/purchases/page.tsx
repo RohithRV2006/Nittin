@@ -1,8 +1,14 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import {
   PurchasesWorkspace,
   type PurchasesPageData,
 } from "@/components/admin/PurchasesWorkspace";
+
+export const metadata: Metadata = {
+  title: "Procurement & Bills",
+  description: "Record supplier purchases into FIFO/FEFO stock lots.",
+};
 
 export const dynamic = "force-dynamic";
 

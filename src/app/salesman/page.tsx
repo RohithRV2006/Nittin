@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Role } from "@prisma/client";
 import {
   SalesmanHomeClient,
@@ -6,6 +7,11 @@ import {
 import { requireVerifiedUser } from "@/lib/auth";
 import { money } from "@/lib/decimal";
 import { prisma } from "@/lib/prisma";
+
+export const metadata: Metadata = {
+  title: "Salesman Portal",
+  description: "Daily field sales orders and active customer overview.",
+};
 
 export const dynamic = "force-dynamic";
 

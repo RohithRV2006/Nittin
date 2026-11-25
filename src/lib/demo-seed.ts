@@ -324,5 +324,7 @@ export async function runDemoBenchmarkSeed(prisma: PrismaClient) {
         },
       });
     }
-  });
+  },
+  { maxWait: 10000, timeout: 30000 }
+  );
 }

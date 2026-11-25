@@ -112,8 +112,8 @@ export function AuditorCenterClient({ data }: { data: AuditorCenterData }) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Auditor Workspace & Report Center"
-        subtitle="Read-only statutory statements, ledger reconciliations, and Tally exports"
+        title="Auditor Report Center"
+        subtitle="Read-only statutory statements, ledgers, and Tally exports"
       />
 
       <AuditorFilterBar
@@ -124,7 +124,7 @@ export function AuditorCenterClient({ data }: { data: AuditorCenterData }) {
             <button
               type="button"
               onClick={handleTallyExcel}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#CBD5E1] bg-white px-3 text-xs font-medium text-[#0F172A] hover:bg-[#F1F5F9]"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-3 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--bg-subtle)]"
             >
               <Download className="h-3.5 w-3.5" />
               Export Tally Excel
@@ -132,7 +132,7 @@ export function AuditorCenterClient({ data }: { data: AuditorCenterData }) {
             <button
               type="button"
               onClick={handleTallyXml}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#047857] px-3 text-xs font-semibold text-white hover:bg-[#065F46]"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-3 text-xs font-semibold text-white hover:bg-[var(--brand-hover)]"
             >
               <Download className="h-3.5 w-3.5" />
               Export Tally XML
@@ -166,10 +166,10 @@ export function AuditorCenterClient({ data }: { data: AuditorCenterData }) {
           <Link
             key={r.href}
             href={`${r.href}${qs}`}
-            className="rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#047857]"
+            className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5 shadow-[0_1px_2px_rgba(68,38,16,0.04)] transition hover:border-[var(--brand-primary)]"
           >
-            <h2 className="text-sm font-semibold text-[#0F172A]">{r.title}</h2>
-            <p className="mt-1 text-xs text-[#64748B]">{r.desc}</p>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">{r.title}</h2>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">{r.desc}</p>
           </Link>
         ))}
       </div>

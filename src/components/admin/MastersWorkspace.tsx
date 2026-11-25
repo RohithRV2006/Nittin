@@ -8,7 +8,8 @@ import type {
   Role,
   UnitType,
 } from "@prisma/client";
-import { UNIT_TYPES, USER_ROLES } from "@/lib/enums";
+import { toast } from "sonner";
+import { UNIT_TYPES, USER_ROLES, isIntegerUnit } from "@/lib/enums";
 import {
   createUserAction,
   toggleCustomerActiveAction,
@@ -95,8 +96,8 @@ export interface MastersData {
 type TabKey = "settings" | "items" | "customers" | "suppliers" | "users";
 
 const inputCls =
-  "h-10 w-full rounded-lg border border-[#CBD5E1] bg-white px-3 text-sm text-[#0F172A] outline-none focus:border-[#047857] focus:ring-2 focus:ring-[#047857]/20";
-const labelCls = "mb-1 block text-xs font-medium text-[#475569]";
+  "h-10 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20";
+const labelCls = "mb-1 block text-xs font-medium text-[var(--text-secondary)]";
 
 export function MastersWorkspace({ data }: { data: MastersData }) {
   const router = useRouter();
@@ -104,10 +105,6 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
   const [tab, setTab] = useState<TabKey>(
     data.settings.isConfigured ? "items" : "settings"
   );
-  const [feedback, setFeedback] = useState<{
-    variant: "success" | "danger";
-    text: string;
-  } | null>(null);
 
   // Settings state
   const [settingsForm, setSettingsForm] = useState(data.settings);
@@ -214,14 +211,13 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
   );
 
   const runAction = (fn: () => Promise<{ ok: boolean; error?: string }>, msg: string) => {
-    setFeedback(null);
     startTransition(async () => {
       const res = await fn();
       if (!res.ok) {
-        setFeedback({ variant: "danger", text: res.error ?? "Operation failed" });
+        toast.error(res.error ?? "Operation failed");
         return;
       }
-      setFeedback({ variant: "success", text: msg });
+      toast.success(msg);
       router.refresh();
     });
   };
@@ -229,8 +225,8 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Master Catalog & Factory Settings"
-        subtitle="Manage company GST profile, SKUs, customers, suppliers, and staff access"
+        title="Master Catalog & Settings"
+        subtitle="Company GST profile, SKUs, customers, suppliers, and staff access"
       />
 
       {!data.settings.isConfigured ? (
@@ -240,12 +236,8 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
         </InlineAlert>
       ) : null}
 
-      {feedback ? (
-        <InlineAlert variant={feedback.variant}>{feedback.text}</InlineAlert>
-      ) : null}
-
       {/* Tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-[#E2E8F0] pb-3">
+      <div className="flex flex-wrap gap-2 border-b border-[var(--border-default)] pb-3">
         {(
           [
             ["settings", "Company Settings"],
@@ -261,8 +253,8 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
             onClick={() => setTab(key)}
             className={`min-h-[38px] rounded-lg px-3.5 text-sm font-medium transition ${
               tab === key
-                ? "bg-[#047857] text-white"
-                : "border border-[#E2E8F0] bg-white text-[#475569] hover:bg-[#F1F5F9]"
+                ? "bg-[var(--brand-primary)] text-white"
+                : "border border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
             }`}
           >
             {label}
@@ -280,7 +272,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
               "Company settings saved."
             );
           }}
-          className="max-w-3xl space-y-4 rounded-xl border border-[#E2E8F0] bg-white p-5 sm:p-6"
+          className="max-w-3xl space-y-4 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5 sm:p-6"
         >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
@@ -386,7 +378,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
             <button
               type="submit"
               disabled={isPending}
-              className="h-10 rounded-lg bg-[#047857] px-5 text-sm font-semibold text-white hover:bg-[#065F46] disabled:opacity-60"
+              className="h-10 rounded-lg bg-[var(--brand-primary)] px-5 text-sm font-semibold text-white hover:bg-[var(--brand-hover)] disabled:opacity-60"
             >
               {isPending ? "Saving..." : "Save Company Settings"}
             </button>
@@ -415,7 +407,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                 });
                 setItemDrawerOpen(true);
               }}
-              className="h-10 rounded-lg bg-[#047857] px-4 text-sm font-semibold text-white hover:bg-[#065F46]"
+              className="h-10 rounded-lg bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white hover:bg-[var(--brand-hover)]"
             >
               + Add Item
             </button>
@@ -442,7 +434,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                 key: "category",
                 header: "Category",
                 render: (r) => (
-                  <span className="text-xs text-[#475569]">
+                  <span className="text-xs text-[var(--text-secondary)]">
                     {r.category.replace("_", " ")}
                   </span>
                 ),
@@ -497,7 +489,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                         });
                         setItemDrawerOpen(true);
                       }}
-                      className="text-xs font-medium text-[#047857] hover:underline"
+                      className="text-xs font-medium text-[var(--brand-primary)] hover:underline"
                     >
                       Edit
                     </button>
@@ -509,7 +501,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                           `Item ${r.active ? "deactivated" : "reactivated"}.`
                         )
                       }
-                      className="text-xs font-medium text-[#64748B] hover:text-[#0F172A]"
+                      className="text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                     >
                       {r.active ? "Deactivate" : "Activate"}
                     </button>
@@ -542,7 +534,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                 });
                 setCustDrawerOpen(true);
               }}
-              className="h-10 rounded-lg bg-[#047857] px-4 text-sm font-semibold text-white hover:bg-[#065F46]"
+              className="h-10 rounded-lg bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white hover:bg-[var(--brand-hover)]"
             >
               + Add Customer
             </button>
@@ -591,7 +583,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                         setPriceItemId(finishedItems[0]?.id ?? "");
                         setCustomPriceVal("");
                       }}
-                      className="text-xs font-medium text-[#0369A1] hover:underline"
+                      className="text-xs font-medium text-sky-700 dark:text-sky-400 hover:underline"
                     >
                       Rates ({r.customPrices.length})
                     </button>
@@ -613,7 +605,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                         });
                         setCustDrawerOpen(true);
                       }}
-                      className="text-xs font-medium text-[#047857] hover:underline"
+                      className="text-xs font-medium text-[var(--brand-primary)] hover:underline"
                     >
                       Edit
                     </button>
@@ -625,7 +617,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                           `Customer ${r.active ? "deactivated" : "reactivated"}.`
                         )
                       }
-                      className="text-xs font-medium text-[#64748B] hover:text-[#0F172A]"
+                      className="text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                     >
                       {r.active ? "Deactivate" : "Activate"}
                     </button>
@@ -654,7 +646,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                 });
                 setSupDrawerOpen(true);
               }}
-              className="h-10 rounded-lg bg-[#047857] px-4 text-sm font-semibold text-white hover:bg-[#065F46]"
+              className="h-10 rounded-lg bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white hover:bg-[var(--brand-hover)]"
             >
               + Add Supplier
             </button>
@@ -707,7 +699,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                         });
                         setSupDrawerOpen(true);
                       }}
-                      className="text-xs font-medium text-[#047857] hover:underline"
+                      className="text-xs font-medium text-[var(--brand-primary)] hover:underline"
                     >
                       Edit
                     </button>
@@ -719,7 +711,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                           `Supplier ${r.active ? "deactivated" : "reactivated"}.`
                         )
                       }
-                      className="text-xs font-medium text-[#64748B]"
+                      className="text-xs font-medium text-[var(--text-muted)]"
                     >
                       {r.active ? "Deactivate" : "Activate"}
                     </button>
@@ -747,7 +739,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                 });
                 setUserDrawerOpen(true);
               }}
-              className="h-10 rounded-lg bg-[#047857] px-4 text-sm font-semibold text-white hover:bg-[#065F46]"
+              className="h-10 rounded-lg bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white hover:bg-[var(--brand-hover)]"
             >
               + Create Staff Account
             </button>
@@ -794,7 +786,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                         onClick={() =>
                           runAction(() => unlockUserAction(r.id), "Account unlocked.")
                         }
-                        className="text-xs font-medium text-[#B45309] hover:underline"
+                        className="text-xs font-medium text-amber-700 dark:text-amber-400 hover:underline"
                       >
                         Unlock
                       </button>
@@ -807,7 +799,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                           `User ${r.active ? "deactivated & sessions revoked" : "reactivated"}.`
                         )
                       }
-                      className="text-xs font-medium text-[#64748B] hover:text-[#0F172A]"
+                      className="text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                     >
                       {r.active ? "Deactivate" : "Reactivate"}
                     </button>
@@ -959,7 +951,9 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
               <label className={labelCls}>Reorder Level</label>
               <input
                 type="number"
-                step="0.001"
+                step={isIntegerUnit(itemForm.unit) ? "1" : "0.001"}
+                min="0"
+                inputMode={isIntegerUnit(itemForm.unit) ? "numeric" : "decimal"}
                 className={inputCls}
                 value={itemForm.reorderLevel}
                 onChange={(e) =>
@@ -971,7 +965,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
           <button
             type="submit"
             disabled={isPending}
-            className="h-10 w-full rounded-lg bg-[#047857] text-sm font-semibold text-white hover:bg-[#065F46] disabled:opacity-60"
+            className="h-10 w-full rounded-lg bg-[var(--brand-primary)] text-sm font-semibold text-white hover:bg-[var(--brand-hover)] disabled:opacity-60"
           >
             {isPending ? "Saving..." : "Save Item"}
           </button>
@@ -1118,7 +1112,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
           <button
             type="submit"
             disabled={isPending}
-            className="h-10 w-full rounded-lg bg-[#047857] text-sm font-semibold text-white hover:bg-[#065F46] disabled:opacity-60"
+            className="h-10 w-full rounded-lg bg-[var(--brand-primary)] text-sm font-semibold text-white hover:bg-[var(--brand-hover)] disabled:opacity-60"
           >
             {isPending ? "Saving..." : "Save Customer"}
           </button>
@@ -1147,7 +1141,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                   return res;
                 }, "Custom customer rate saved.");
               }}
-              className="space-y-3 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-4"
+              className="space-y-3 rounded-lg border border-[var(--border-default)] bg-[var(--bg-subtle)] p-4"
             >
               <div>
                 <label className={labelCls}>Finished Product</label>
@@ -1179,25 +1173,25 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
               <button
                 type="submit"
                 disabled={isPending}
-                className="h-10 w-full rounded-lg bg-[#047857] text-sm font-semibold text-white hover:bg-[#065F46]"
+                className="h-10 w-full rounded-lg bg-[var(--brand-primary)] text-sm font-semibold text-white hover:bg-[var(--brand-hover)]"
               >
                 Save Custom Rate
               </button>
             </form>
 
             <div className="space-y-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-[#64748B]">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Configured Overrides
               </h3>
               {priceDrawerCustomer.customPrices.length === 0 ? (
-                <p className="text-xs text-[#64748B]">
+                <p className="text-xs text-[var(--text-muted)]">
                   No custom overrides set. Standard catalog prices apply.
                 </p>
               ) : (
                 priceDrawerCustomer.customPrices.map((cp) => (
                   <div
                     key={cp.itemId}
-                    className="flex items-center justify-between rounded-lg border border-[#E2E8F0] px-3 py-2 text-sm"
+                    className="flex items-center justify-between rounded-lg border border-[var(--border-default)] px-3 py-2 text-sm"
                   >
                     <span>{cp.itemName}</span>
                     <span className="font-semibold tabular-nums">₹{cp.customPrice}</span>
@@ -1289,7 +1283,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
           <button
             type="submit"
             disabled={isPending}
-            className="h-10 w-full rounded-lg bg-[#047857] text-sm font-semibold text-white hover:bg-[#065F46]"
+            className="h-10 w-full rounded-lg bg-[var(--brand-primary)] text-sm font-semibold text-white hover:bg-[var(--brand-hover)]"
           >
             Save Supplier
           </button>
@@ -1373,7 +1367,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
           <button
             type="submit"
             disabled={isPending}
-            className="h-10 w-full rounded-lg bg-[#047857] text-sm font-semibold text-white hover:bg-[#065F46]"
+            className="h-10 w-full rounded-lg bg-[var(--brand-primary)] text-sm font-semibold text-white hover:bg-[var(--brand-hover)]"
           >
             Create Account
           </button>

@@ -4,9 +4,9 @@ import { useCallback, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { OrderStatus } from "@prisma/client";
 import { Search, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { cancelFieldOrderAction } from "@/actions/salesman.actions";
 import { OfflineSyncBanner } from "@/components/salesman/OfflineSyncBanner";
-import { InlineAlert } from "@/components/ui/InlineAlert";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ResponsiveTable } from "@/components/ui/ResponsiveTable";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -66,10 +66,6 @@ export function SalesmanOrdersWorkspace({
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [offlineOrders, setOfflineOrders] = useState<QueuedOfflineOrder[]>([]);
-  const [feedback, setFeedback] = useState<{
-    variant: "success" | "danger";
-    text: string;
-  } | null>(null);
 
   const handleQueueChanged = useCallback((rows: QueuedOfflineOrder[]) => {
     setOfflineOrders(rows);
@@ -93,14 +89,13 @@ export function SalesmanOrdersWorkspace({
       `Cancel submitted order ${orderNumber}? Enter reason:`
     );
     if (!reason) return;
-    setFeedback(null);
     startTransition(async () => {
       const res = await cancelFieldOrderAction({ orderId, reason });
       if (!res.ok) {
-        setFeedback({ variant: "danger", text: res.error ?? "Failed to cancel" });
+        toast.error(res.error ?? "Failed to cancel");
         return;
       }
-      setFeedback({ variant: "success", text: `Order ${orderNumber} cancelled.` });
+      toast.success(`Order ${orderNumber} cancelled.`);
       router.refresh();
     });
   };
@@ -110,29 +105,26 @@ export function SalesmanOrdersWorkspace({
     setOfflineOrders((prev) =>
       prev.filter((o) => o.clientRequestId !== clientRequestId)
     );
+    toast.success("Removed offline queued order.");
   };
 
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Orders & Customer-Wise Sales"
-        subtitle="Track order approvals, dispatches, offline queue, and customer totals"
+        title="Orders & Customer Sales"
+        subtitle="Track approvals, dispatches, offline queue, and customer totals"
       />
 
       <OfflineSyncBanner onQueueChanged={handleQueueChanged} />
 
-      {feedback ? (
-        <InlineAlert variant={feedback.variant}>{feedback.text}</InlineAlert>
-      ) : null}
-
-      <div className="flex gap-2 border-b border-[#E2E8F0] pb-3">
+      <div className="flex gap-2 border-b border-[var(--border-default)] pb-3">
         <button
           type="button"
           onClick={() => setViewTab("history")}
           className={`min-h-[40px] rounded-lg px-4 text-sm font-medium ${
             viewTab === "history"
-              ? "bg-[#047857] text-white"
-              : "border border-[#E2E8F0] bg-white text-[#475569]"
+              ? "bg-[var(--brand-primary)] text-white"
+              : "border border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
           }`}
         >
           Order History ({data.orders.length + offlineOrders.length})
@@ -142,8 +134,8 @@ export function SalesmanOrdersWorkspace({
           onClick={() => setViewTab("customer-sales")}
           className={`min-h-[40px] rounded-lg px-4 text-sm font-medium ${
             viewTab === "customer-sales"
-              ? "bg-[#047857] text-white"
-              : "border border-[#E2E8F0] bg-white text-[#475569]"
+              ? "bg-[var(--brand-primary)] text-white"
+              : "border border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
           }`}
         >
           Customer-Wise Sales ({data.customerSummary.length})
@@ -154,13 +146,13 @@ export function SalesmanOrdersWorkspace({
         <div className="space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="relative flex-1 sm:max-w-xs">
-              <Search className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-[#64748B]" />
+              <Search className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-[var(--text-muted)]" />
               <input
                 type="search"
                 placeholder="Search customer or order #..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-10 w-full rounded-lg border border-[#CBD5E1] bg-white pr-3 pl-9 text-sm outline-none focus:border-[#047857]"
+                className="h-10 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] pr-3 pl-9 text-sm outline-none focus:border-[var(--brand-primary)]"
               />
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -180,8 +172,8 @@ export function SalesmanOrdersWorkspace({
                   onClick={() => setStatusFilter(key)}
                   className={`min-h-[34px] rounded-full px-3 text-xs font-medium ${
                     statusFilter === key
-                      ? "bg-[#047857] text-white"
-                      : "border border-[#E2E8F0] bg-white text-[#475569]"
+                      ? "bg-[var(--brand-primary)] text-white"
+                      : "border border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
                   }`}
                 >
                   {label}
@@ -202,7 +194,7 @@ export function SalesmanOrdersWorkspace({
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-semibold text-[#B45309]">
+                        <span className="font-mono text-xs font-semibold text-amber-700 dark:text-amber-400">
                           OFFLINE-QUEUE
                         </span>
                         <StatusBadge
@@ -210,14 +202,14 @@ export function SalesmanOrdersWorkspace({
                           customLabel="Pending Sync"
                         />
                       </div>
-                      <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                      <p className="mt-1 text-sm font-semibold text-[var(--text-primary)]">
                         {oq.customerName}
                       </p>
-                      <p className="text-xs text-[#475569]">
+                      <p className="text-xs text-[var(--text-secondary)]">
                         {oq.items.map((i) => `${i.itemName} × ${i.quantity} ${i.inputUnit}`).join(", ")}
                       </p>
                       {oq.lastError ? (
-                        <p className="mt-1 text-xs font-medium text-[#B91C1C]">
+                        <p className="mt-1 text-xs font-medium text-red-700 dark:text-red-400">
                           Sync error: {oq.lastError}
                         </p>
                       ) : null}
@@ -229,7 +221,7 @@ export function SalesmanOrdersWorkspace({
                       <button
                         type="button"
                         onClick={() => void handleDiscardOffline(oq.clientRequestId)}
-                        className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#B91C1C]"
+                        className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-red-700 dark:text-red-400"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                         Discard
@@ -243,7 +235,7 @@ export function SalesmanOrdersWorkspace({
 
           {/* Online Server Orders */}
           {filteredOrders.length === 0 ? (
-            <div className="rounded-xl border border-[#E2E8F0] bg-white px-5 py-10 text-center text-sm text-[#64748B]">
+            <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] px-5 py-10 text-center text-sm text-[var(--text-muted)]">
               No matching orders found.
             </div>
           ) : (
@@ -253,7 +245,7 @@ export function SalesmanOrdersWorkspace({
                 return (
                   <div
                     key={o.id}
-                    className="rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+                    className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 shadow-[0_1px_2px_rgba(68,38,16,0.04)]"
                   >
                     <div
                       role="button"
@@ -273,19 +265,19 @@ export function SalesmanOrdersWorkspace({
                           </span>
                           <StatusBadge status={o.status} />
                         </div>
-                        <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                        <p className="mt-1 text-sm font-semibold text-[var(--text-primary)]">
                           {o.customerName}{" "}
-                          <span className="text-xs font-normal text-[#64748B]">
+                          <span className="text-xs font-normal text-[var(--text-muted)]">
                             ({o.customerState})
                           </span>
                         </p>
-                        <p className="text-xs text-[#64748B]">{o.orderDate}</p>
+                        <p className="text-xs text-[var(--text-muted)]">{o.orderDate}</p>
                       </div>
                       <div className="text-right">
                         <p className="text-base font-semibold tabular-nums">
                           {formatINR(o.totalAmount)}
                         </p>
-                        <span className="text-[11px] text-[#047857]">
+                        <span className="text-[11px] text-[var(--brand-primary)]">
                           {expanded ? "Hide details ▲" : "View items ▼"}
                         </span>
                       </div>
@@ -304,10 +296,10 @@ export function SalesmanOrdersWorkspace({
                           </div>
                         ))}
                         {o.notes ? (
-                          <p className="text-[#475569]">Notes: {o.notes}</p>
+                          <p className="text-[var(--text-secondary)]">Notes: {o.notes}</p>
                         ) : null}
                         {o.rejectionReason ? (
-                          <p className="font-medium text-[#B91C1C]">
+                          <p className="font-medium text-red-700 dark:text-red-400">
                             Reason: {o.rejectionReason}
                           </p>
                         ) : null}
@@ -319,7 +311,7 @@ export function SalesmanOrdersWorkspace({
                               onClick={() =>
                                 handleCancelSubmitted(o.id, o.orderNumber)
                               }
-                              className="text-xs font-medium text-[#B91C1C] hover:underline"
+                              className="text-xs font-medium text-red-700 dark:text-red-400 hover:underline"
                             >
                               Cancel Submitted Order
                             </button>
@@ -341,7 +333,7 @@ export function SalesmanOrdersWorkspace({
           emptyDescription="Customer-wise sales totals will appear as you submit orders."
           mobileTitle={(r) => r.customerName}
           mobileSubtitle={(r) => (
-            <span className="text-xs text-[#64748B]">{r.state}</span>
+            <span className="text-xs text-[var(--text-muted)]">{r.state}</span>
           )}
           columns={[
             { key: "cust", header: "Customer", render: (r) => r.customerName },

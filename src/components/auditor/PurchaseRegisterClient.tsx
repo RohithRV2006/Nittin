@@ -111,7 +111,7 @@ export function PurchaseRegisterClient({
               )
             }
             onPdf={() =>
-              downloadReportPdf(
+              void downloadReportPdf(
                 `Purchase-Register-${data.from}-to-${data.to}.pdf`,
                 "Purchase Register",
                 `Period: ${data.from} to ${data.to}`,
@@ -163,7 +163,7 @@ export function PurchaseRegisterClient({
           {
             key: "items",
             header: "Items",
-            render: (r) => <span className="text-xs text-[#475569]">{r.itemsSummary}</span>,
+            render: (r) => <span className="text-xs text-[var(--text-secondary)]">{r.itemsSummary}</span>,
           },
           {
             key: "taxable",

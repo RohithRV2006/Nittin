@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
+import { toast } from "sonner";
 import { demoSwitchAction, loginAction } from "@/actions/auth.actions";
-import { InlineAlert } from "@/components/ui/InlineAlert";
 
 const DEMO_ACCOUNTS = [
   { email: "salesman.a@nittin-demo.local", label: "Salesman A (Mobile)" },
@@ -15,16 +15,19 @@ const DEMO_ACCOUNTS = [
 
 export function LoginForm({ demoMode }: { demoMode: boolean }) {
   const [state, formAction, pending] = useActionState(loginAction, {});
-  const [demoError, setDemoError] = useState<string | null>(null);
-  const [demoMessage, setDemoMessage] = useState<string | null>(null);
   const [isSwitching, startTransition] = useTransition();
   const [isResetting, setIsResetting] = useState(false);
 
+  useEffect(() => {
+    if (state?.error) {
+      toast.error(state.error);
+    }
+  }, [state?.error]);
+
   const handleDemoLogin = (email: string) => {
-    setDemoError(null);
     startTransition(async () => {
       const res = await demoSwitchAction(email);
-      if (res?.error) setDemoError(res.error);
+      if (res?.error) toast.error(res.error);
     });
   };
 
@@ -37,18 +40,16 @@ export function LoginForm({ demoMode }: { demoMode: boolean }) {
       return;
     }
     setIsResetting(true);
-    setDemoError(null);
-    setDemoMessage(null);
     try {
       const res = await fetch("/api/demo/reset", { method: "POST" });
       const data = await res.json();
       if (!res.ok) {
-        setDemoError(data.error || "Failed to reset benchmark dataset.");
+        toast.error(data.error || "Failed to load benchmark dataset.");
       } else {
-        setDemoMessage("Section 5 benchmark dataset loaded successfully.");
+        toast.success("Section 5 benchmark dataset loaded.");
       }
     } catch {
-      setDemoError("Network error while resetting demo dataset.");
+      toast.error("Network error while resetting demo dataset.");
     } finally {
       setIsResetting(false);
     }
@@ -56,19 +57,11 @@ export function LoginForm({ demoMode }: { demoMode: boolean }) {
 
   return (
     <div className="space-y-5">
-      {state?.error ? (
-        <InlineAlert variant="danger">{state.error}</InlineAlert>
-      ) : null}
-      {demoError ? <InlineAlert variant="danger">{demoError}</InlineAlert> : null}
-      {demoMessage ? (
-        <InlineAlert variant="success">{demoMessage}</InlineAlert>
-      ) : null}
-
       <form action={formAction} className="space-y-4">
         <div>
           <label
             htmlFor="email"
-            className="mb-1.5 block text-xs font-medium text-[#475569]"
+            className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]"
           >
             Email Address
           </label>
@@ -79,14 +72,14 @@ export function LoginForm({ demoMode }: { demoMode: boolean }) {
             required
             autoComplete="email"
             placeholder="name@company.com"
-            className="h-11 w-full rounded-lg border border-[#CBD5E1] bg-white px-3 text-base text-[#0F172A] outline-none transition focus:border-[#047857] focus:ring-2 focus:ring-[#047857]/20 sm:text-sm"
+            className="h-11 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-3 text-base text-[var(--text-primary)] outline-none transition focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20 sm:text-sm"
           />
         </div>
 
         <div>
           <label
             htmlFor="password"
-            className="mb-1.5 block text-xs font-medium text-[#475569]"
+            className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]"
           >
             Password
           </label>
@@ -97,30 +90,30 @@ export function LoginForm({ demoMode }: { demoMode: boolean }) {
             required
             autoComplete="current-password"
             placeholder="••••••••"
-            className="h-11 w-full rounded-lg border border-[#CBD5E1] bg-white px-3 text-base text-[#0F172A] outline-none transition focus:border-[#047857] focus:ring-2 focus:ring-[#047857]/20 sm:text-sm"
+            className="h-11 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-3 text-base text-[var(--text-primary)] outline-none transition focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20 sm:text-sm"
           />
         </div>
 
         <button
           type="submit"
           disabled={pending}
-          className="h-11 w-full rounded-lg bg-[#047857] px-4 text-sm font-semibold text-white transition hover:bg-[#065F46] disabled:opacity-60"
+          className="h-11 w-full rounded-lg bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--brand-hover)] disabled:opacity-60"
         >
           {pending ? "Signing in..." : "Sign In"}
         </button>
       </form>
 
       {demoMode ? (
-        <div className="border-t border-[#E2E8F0] pt-5">
+        <div className="border-t border-[var(--border-default)] pt-5">
           <div className="mb-3 flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-[#64748B]">
-              Demo Evaluation Section
+            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              Demo Access
             </span>
             <button
               type="button"
               onClick={handleResetDemo}
               disabled={isResetting}
-              className="text-xs font-medium text-[#047857] hover:underline disabled:opacity-60"
+              className="text-xs font-medium text-[var(--brand-primary)] hover:underline disabled:opacity-60"
             >
               {isResetting ? "Resetting..." : "Load / Reset Benchmark Data"}
             </button>
@@ -132,7 +125,7 @@ export function LoginForm({ demoMode }: { demoMode: boolean }) {
                 type="button"
                 disabled={isSwitching}
                 onClick={() => handleDemoLogin(acct.email)}
-                className="min-h-[40px] rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-left text-xs font-medium text-[#0F172A] transition hover:border-[#047857] hover:bg-[#ECFDF5] disabled:opacity-60"
+                className="min-h-[40px] rounded-lg border border-[var(--border-default)] bg-[var(--bg-subtle)] px-3 py-2 text-left text-xs font-medium text-[var(--text-primary)] transition hover:border-[var(--brand-primary)] hover:bg-[var(--brand-soft)] disabled:opacity-60"
               >
                 {acct.label}
               </button>

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { InvoiceStatus } from "@prisma/client";
 import {
   SalesRegisterClient,
@@ -6,6 +7,11 @@ import {
 import { money, qty } from "@/lib/decimal";
 import { parseDateRangeParams } from "@/lib/engines/reports";
 import { prisma } from "@/lib/prisma";
+
+export const metadata: Metadata = {
+  title: "Sales Register",
+  description: "Invoice, customer, and product outward sales breakdown.",
+};
 
 export const dynamic = "force-dynamic";
 

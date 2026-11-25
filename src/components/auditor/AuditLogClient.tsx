@@ -88,7 +88,7 @@ export function AuditLogClient({ data }: { data: AuditLogPageData }) {
               )
             }
             onPdf={() =>
-              downloadReportPdf(
+              void downloadReportPdf(
                 `Audit-Trail-${data.from}-to-${data.to}.pdf`,
                 "System Audit Trail",
                 `Period: ${data.from} to ${data.to}`,
@@ -101,11 +101,11 @@ export function AuditLogClient({ data }: { data: AuditLogPageData }) {
       />
 
       <div className="flex items-center gap-2">
-        <label className="text-xs font-medium text-[#475569]">Entity Type:</label>
+        <label className="text-xs font-medium text-[var(--text-secondary)]">Entity Type:</label>
         <select
           value={entityFilter}
           onChange={(e) => setEntityFilter(e.target.value)}
-          className="h-9 rounded-lg border border-[#CBD5E1] bg-white px-3 text-xs"
+          className="h-9 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-3 text-xs"
         >
           <option value="ALL">All Entities</option>
           {entityTypes.map((et) => (
@@ -157,7 +157,7 @@ export function AuditLogClient({ data }: { data: AuditLogPageData }) {
             key: "diff",
             header: "Payload Snapshot",
             render: (r) => (
-              <span className="block max-w-xs truncate font-mono text-[11px] text-[#475569]">
+              <span className="block max-w-xs truncate font-mono text-[11px] text-[var(--text-secondary)]">
                 {r.changesPreview}
               </span>
             ),

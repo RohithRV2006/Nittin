@@ -1,9 +1,15 @@
+import type { Metadata } from "next";
 import {
   PurchaseRegisterClient,
   type PurchaseRegisterData,
 } from "@/components/auditor/PurchaseRegisterClient";
 import { parseDateRangeParams } from "@/lib/engines/reports";
 import { prisma } from "@/lib/prisma";
+
+export const metadata: Metadata = {
+  title: "Purchase Register",
+  description: "Supplier purchase bills and input tax credit register.",
+};
 
 export const dynamic = "force-dynamic";
 

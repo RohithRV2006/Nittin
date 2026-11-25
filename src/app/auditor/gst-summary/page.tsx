@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { InvoiceStatus } from "@prisma/client";
 import {
   GstSummaryClient,
@@ -6,6 +7,11 @@ import {
 import { money } from "@/lib/decimal";
 import { parseDateRangeParams } from "@/lib/engines/reports";
 import { prisma } from "@/lib/prisma";
+
+export const metadata: Metadata = {
+  title: "GST Summary",
+  description: "GSTR-1 and GSTR-3B tax liability and credit note summary.",
+};
 
 export const dynamic = "force-dynamic";
 

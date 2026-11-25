@@ -3,16 +3,17 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { ItemCategory, UnitType } from "@prisma/client";
+import { toast } from "sonner";
 import {
   cloneBomAction,
   toggleBomActiveAction,
   upsertBomAction,
 } from "@/actions/production.actions";
-import { InlineAlert } from "@/components/ui/InlineAlert";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SlideOverDrawer } from "@/components/ui/SlideOverDrawer";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { formatINR } from "@/lib/decimal";
+import { formatDisplayQty, isIntegerUnit } from "@/lib/enums";
 import { computePackScaleFactor } from "@/lib/units";
 
 export interface BomsPageData {
@@ -55,12 +56,8 @@ export interface BomsPageData {
 }
 
 function getCompatibleUnits(baseUnit: UnitType, unitsPerCarton: number | null): UnitType[] {
-  if (baseUnit === "KG" || baseUnit === "GRAM") {
-    return ["KG", "GRAM"];
-  }
-  if (baseUnit === "LITRE" || baseUnit === "ML") {
-    return ["LITRE", "ML"];
-  }
+  if (baseUnit === "KG" || baseUnit === "GRAM") return ["KG", "GRAM"];
+  if (baseUnit === "LITRE" || baseUnit === "ML") return ["LITRE", "ML"];
   if (
     (baseUnit === "PIECE" || baseUnit === "PACKET") &&
     unitsPerCarton &&
@@ -72,23 +69,18 @@ function getCompatibleUnits(baseUnit: UnitType, unitsPerCarton: number | null): 
 }
 
 const inputCls =
-  "h-10 w-full rounded-lg border border-[#CBD5E1] bg-white px-3 text-sm text-[#0F172A] outline-none focus:border-[#047857] focus:ring-2 focus:ring-[#047857]/20";
-const labelCls = "mb-1 block text-xs font-medium text-[#475569]";
+  "h-10 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--brand-primary)]";
+const labelCls = "mb-1 block text-xs font-medium text-[var(--text-secondary)]";
 
 export function BomsWorkspace({ data }: { data: BomsPageData }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [feedback, setFeedback] = useState<{
-    variant: "success" | "danger";
-    text: string;
-  } | null>(null);
 
   const ingMap = useMemo(
     () => new Map(data.ingredientItems.map((i) => [i.id, i])),
     [data.ingredientItems]
   );
 
-  // Create / Edit BOM Drawer
   const [bomOpen, setBomOpen] = useState(false);
   const [bomForm, setBomForm] = useState<{
     id?: string;
@@ -105,7 +97,6 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
     items: [],
   });
 
-  // Clone & Scale BOM Drawer
   const [cloneSource, setCloneSource] = useState<
     BomsPageData["boms"][number] | null
   >(null);
@@ -146,7 +137,7 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
       }
     }
     setCloneScale(scale);
-    setCloneBatchOut(bom.batchSizeOutput);
+    setCloneBatchOut(formatDisplayQty(bom.batchSizeOutput, bom.finishedUnit));
     setCloneName(
       defaultTarget ? `${defaultTarget.name} Recipe` : `${bom.name} (Scaled)`
     );
@@ -164,25 +155,22 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
           ).toFixed(3)
         );
       } catch {
-        // leave manual scale
+        // manual
       }
     }
-    if (target) {
-      setCloneName(`${target.name} Recipe`);
-    }
+    if (target) setCloneName(`${target.name} Recipe`);
   };
 
   const handleSaveBom = (e: React.FormEvent) => {
     e.preventDefault();
-    setFeedback(null);
     startTransition(async () => {
       const res = await upsertBomAction(bomForm);
       if (!res.ok) {
-        setFeedback({ variant: "danger", text: res.error ?? "Failed to save BOM" });
+        toast.error(res.error ?? "Failed to save BOM");
         return;
       }
       setBomOpen(false);
-      setFeedback({ variant: "success", text: "BOM recipe saved." });
+      toast.success("BOM recipe saved.");
       router.refresh();
     });
   };
@@ -190,7 +178,6 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
   const handleCloneBom = (e: React.FormEvent) => {
     e.preventDefault();
     if (!cloneSource) return;
-    setFeedback(null);
     startTransition(async () => {
       const res = await cloneBomAction({
         sourceBomId: cloneSource.id,
@@ -200,11 +187,11 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
         batchSizeOutput: cloneBatchOut,
       });
       if (!res.ok) {
-        setFeedback({ variant: "danger", text: res.error ?? "Clone failed" });
+        toast.error(res.error ?? "Clone failed");
         return;
       }
       setCloneSource(null);
-      setFeedback({ variant: "success", text: "Cloned and scaled BOM created." });
+      toast.success("Cloned and scaled BOM created.");
       router.refresh();
     });
   };
@@ -212,29 +199,27 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="BOM Recipe Directory & Builder"
-        subtitle="Define standard ingredient/packaging ratios per batch and scale across pack sizes"
+        title="BOM Recipes"
+        subtitle="Standard batch ratios and pack-size scaling"
         actions={
           <button
             type="button"
             disabled={data.finishedItems.length === 0 || data.ingredientItems.length === 0}
             onClick={openCreateBom}
-            className="h-10 rounded-lg bg-[#047857] px-4 text-sm font-semibold text-white hover:bg-[#065F46] disabled:opacity-50"
+            className="h-10 rounded-lg bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white hover:bg-[var(--brand-hover)] disabled:opacity-50"
           >
             + Create BOM Recipe
           </button>
         }
       />
 
-      {feedback ? (
-        <InlineAlert variant={feedback.variant}>{feedback.text}</InlineAlert>
-      ) : null}
-
       {data.boms.length === 0 ? (
-        <div className="rounded-xl border border-[#E2E8F0] bg-white px-6 py-12 text-center">
-          <p className="text-sm font-medium text-[#0F172A]">No BOM recipes configured</p>
-          <p className="mt-1 text-xs text-[#64748B]">
-            Create a Bill of Materials linking raw materials and packaging to a finished product.
+        <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-12 text-center">
+          <p className="text-sm font-medium text-[var(--text-primary)]">
+            No BOM recipes configured
+          </p>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">
+            Create a Bill of Materials linking ingredients to a finished product.
           </p>
         </div>
       ) : (
@@ -242,22 +227,23 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
           {data.boms.map((bom) => (
             <div
               key={bom.id}
-              className="flex flex-col justify-between rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+              className="flex flex-col justify-between rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5 shadow-[0_1px_2px_rgba(35,23,15,0.04)]"
             >
               <div>
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h2 className="text-base font-semibold text-[#0F172A]">
+                    <h2 className="text-base font-semibold text-[var(--text-primary)]">
                       {bom.name}
                     </h2>
-                    <p className="mt-0.5 text-xs text-[#475569]">
-                      Product: {bom.finishedItemName} (
+                    <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
+                      {bom.finishedItemName} (
                       <span className="font-mono">{bom.finishedItemCode}</span>) •
-                      Expected Yield:{" "}
+                      Yield:{" "}
                       <strong className="tabular-nums">
-                        {bom.batchSizeOutput} {bom.finishedUnit}
+                        {formatDisplayQty(bom.batchSizeOutput, bom.finishedUnit)}{" "}
+                        {bom.finishedUnit}
                       </strong>{" "}
-                      • Tolerance: ±{bom.tolerancePercent}%
+                      • Tol: ±{bom.tolerancePercent}%
                     </p>
                   </div>
                   <StatusBadge
@@ -266,30 +252,30 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
                   />
                 </div>
 
-                <div className="mt-4 divide-y divide-[#F1F5F9] rounded-lg border border-[#E2E8F0] bg-[#F8FAFC]">
+                <div className="mt-4 divide-y divide-[var(--border-default)] rounded-lg border border-[var(--border-default)] bg-[var(--bg-subtle)]">
                   {bom.items.map((line) => (
                     <div
                       key={line.itemId}
                       className="flex items-center justify-between px-3 py-2 text-xs"
                     >
-                      <span className="font-medium text-[#0F172A]">
+                      <span className="font-medium text-[var(--text-primary)]">
                         {line.itemName}{" "}
-                        <span className="font-mono text-[#64748B]">
+                        <span className="font-mono text-[var(--text-muted)]">
                           ({line.itemCode})
                         </span>
                       </span>
-                      <span className="font-semibold tabular-nums text-[#0F172A]">
-                        {line.standardQty} {line.unit}
+                      <span className="font-semibold tabular-nums text-[var(--text-primary)]">
+                        {formatDisplayQty(line.standardQty, line.unit)} {line.unit}
                       </span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-[#F1F5F9] pt-3">
-                <span className="text-xs text-[#64748B] tabular-nums">
-                  Est. FIFO Material Cost:{" "}
-                  <strong className="text-[#0F172A]">
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-default)] pt-3">
+                <span className="text-xs text-[var(--text-muted)] tabular-nums">
+                  Est. FIFO Material:{" "}
+                  <strong className="text-[var(--text-primary)]">
                     {formatINR(bom.estimatedBatchCost)}
                   </strong>
                 </span>
@@ -297,7 +283,7 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
                   <button
                     type="button"
                     onClick={() => openCloneBom(bom)}
-                    className="text-xs font-medium text-[#0369A1] hover:underline"
+                    className="text-xs font-medium text-[var(--accent-gold)] hover:underline"
                   >
                     Clone & Scale
                   </button>
@@ -308,17 +294,20 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
                         id: bom.id,
                         finishedItemId: bom.finishedItemId,
                         name: bom.name,
-                        batchSizeOutput: bom.batchSizeOutput,
+                        batchSizeOutput: formatDisplayQty(
+                          bom.batchSizeOutput,
+                          bom.finishedUnit
+                        ),
                         tolerancePercent: bom.tolerancePercent,
                         items: bom.items.map((l) => ({
                           itemId: l.itemId,
-                          standardQty: l.standardQty,
+                          standardQty: formatDisplayQty(l.standardQty, l.unit),
                           unit: l.unit,
                         })),
                       });
                       setBomOpen(true);
                     }}
-                    className="text-xs font-medium text-[#047857] hover:underline"
+                    className="text-xs font-medium text-[var(--brand-primary)] hover:underline"
                   >
                     Edit
                   </button>
@@ -326,11 +315,13 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
                     type="button"
                     onClick={() =>
                       startTransition(async () => {
-                        await toggleBomActiveAction(bom.id, !bom.active);
+                        const res = await toggleBomActiveAction(bom.id, !bom.active);
+                        if (res.ok) toast.success("BOM status updated.");
+                        else toast.error(res.error ?? "Update failed");
                         router.refresh();
                       })
                     }
-                    className="text-xs font-medium text-[#64748B]"
+                    className="text-xs font-medium text-[var(--text-muted)]"
                   >
                     {bom.active ? "Deactivate" : "Activate"}
                   </button>
@@ -341,12 +332,11 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
         </div>
       )}
 
-      {/* Create / Edit BOM Drawer */}
       <SlideOverDrawer
         open={bomOpen}
         onClose={() => setBomOpen(false)}
         title={bomForm.id ? "Edit BOM Recipe" : "Create BOM Recipe"}
-        subtitle="Specify standard quantities of raw materials & packaging per batch"
+        subtitle="Ingredient & packaging ratios per batch"
       >
         <form onSubmit={handleSaveBom} className="space-y-4">
           <div>
@@ -380,7 +370,7 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
               <label className={labelCls}>Expected Output / Batch</label>
               <input
                 type="number"
-                step="0.001"
+                step="1"
                 required
                 className={inputCls}
                 value={bomForm.batchSizeOutput}
@@ -390,7 +380,7 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
               />
             </div>
             <div>
-              <label className={labelCls}>Variance Tolerance (%)</label>
+              <label className={labelCls}>Tolerance (%)</label>
               <input
                 type="number"
                 step="0.01"
@@ -406,8 +396,8 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
 
           <div className="space-y-2.5">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-[#64748B]">
-                Ingredients & Packaging Lines
+              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                Ingredients & Packaging
               </span>
               <button
                 type="button"
@@ -425,7 +415,7 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
                     ],
                   });
                 }}
-                className="text-xs font-semibold text-[#047857] hover:underline"
+                className="text-xs font-semibold text-[var(--brand-primary)] hover:underline"
               >
                 + Add Line
               </button>
@@ -436,10 +426,11 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
               const units = ing
                 ? getCompatibleUnits(ing.unit, ing.unitsPerCarton)
                 : [line.unit];
+              const whole = isIntegerUnit(line.unit);
               return (
                 <div
                   key={idx}
-                  className="grid grid-cols-1 gap-2 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3 sm:grid-cols-12"
+                  className="grid grid-cols-1 gap-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-subtle)] p-3 sm:grid-cols-12"
                 >
                   <div className="sm:col-span-6">
                     <select
@@ -466,7 +457,7 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
                   <div className="sm:col-span-3">
                     <input
                       type="number"
-                      step="0.001"
+                      step={whole ? "1" : "0.001"}
                       required
                       placeholder="Qty"
                       className={inputCls}
@@ -517,23 +508,22 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
           <button
             type="submit"
             disabled={isPending}
-            className="h-10 w-full rounded-lg bg-[#047857] text-sm font-semibold text-white hover:bg-[#065F46]"
+            className="h-10 w-full rounded-lg bg-[var(--brand-primary)] text-sm font-semibold text-white hover:bg-[var(--brand-hover)]"
           >
             {isPending ? "Saving..." : "Save BOM Recipe"}
           </button>
         </form>
       </SlideOverDrawer>
 
-      {/* Clone & Scale BOM Drawer */}
       <SlideOverDrawer
         open={Boolean(cloneSource)}
         onClose={() => setCloneSource(null)}
         title={`Clone & Scale — ${cloneSource?.name ?? ""}`}
-        subtitle="Reuse an existing recipe across another pack size (e.g. 200 g → 500 g)"
+        subtitle="Scale recipe across pack sizes"
       >
         <form onSubmit={handleCloneBom} className="space-y-4">
           <div>
-            <label className={labelCls}>Target Finished Product</label>
+            <label className={labelCls}>Target Product</label>
             <select
               className={inputCls}
               required
@@ -558,7 +548,7 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelCls}>Ingredient Scale Factor</label>
+              <label className={labelCls}>Scale Factor</label>
               <input
                 type="number"
                 step="0.001"
@@ -569,10 +559,10 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
               />
             </div>
             <div>
-              <label className={labelCls}>Expected Batch Yield</label>
+              <label className={labelCls}>Expected Yield</label>
               <input
                 type="number"
-                step="0.001"
+                step="1"
                 required
                 className={inputCls}
                 value={cloneBatchOut}
@@ -583,7 +573,7 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
           <button
             type="submit"
             disabled={isPending}
-            className="h-10 w-full rounded-lg bg-[#047857] text-sm font-semibold text-white hover:bg-[#065F46]"
+            className="h-10 w-full rounded-lg bg-[var(--brand-primary)] text-sm font-semibold text-white hover:bg-[var(--brand-hover)]"
           >
             {isPending ? "Cloning..." : "Create Scaled BOM"}
           </button>

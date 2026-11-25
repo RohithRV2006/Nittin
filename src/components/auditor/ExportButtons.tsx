@@ -17,7 +17,7 @@ export function ExportButtons({
         <button
           type="button"
           onClick={onExcel}
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#CBD5E1] bg-white px-3 text-xs font-medium text-[#0F172A] hover:bg-[#F1F5F9]"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-3 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--bg-subtle)]"
         >
           <Download className="h-3.5 w-3.5" />
           Excel
@@ -27,7 +27,7 @@ export function ExportButtons({
         <button
           type="button"
           onClick={onCsv}
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#CBD5E1] bg-white px-3 text-xs font-medium text-[#0F172A] hover:bg-[#F1F5F9]"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-3 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--bg-subtle)]"
         >
           <Download className="h-3.5 w-3.5" />
           CSV
@@ -37,7 +37,7 @@ export function ExportButtons({
         <button
           type="button"
           onClick={onPdf}
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#047857] px-3 text-xs font-semibold text-white hover:bg-[#065F46]"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-3 text-xs font-semibold text-white hover:bg-[var(--brand-hover)]"
         >
           <Download className="h-3.5 w-3.5" />
           PDF

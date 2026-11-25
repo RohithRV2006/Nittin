@@ -21,15 +21,16 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   OWNER: "Business Owner",
 };
 
+// Strict 1-role-per-portal separation of duties
 export const ROUTE_ACCESS_RULES: Array<{
   prefix: string;
   allowedRoles: UserRole[];
 }> = [
   { prefix: "/salesman", allowedRoles: ["SALESMAN"] },
   { prefix: "/admin", allowedRoles: ["FACTORY_ADMIN"] },
-  { prefix: "/production", allowedRoles: ["PRODUCTION_SUPERVISOR", "FACTORY_ADMIN"] },
-  { prefix: "/auditor", allowedRoles: ["AUDITOR", "FACTORY_ADMIN", "OWNER"] },
-  { prefix: "/dashboard", allowedRoles: ["OWNER", "FACTORY_ADMIN"] },
+  { prefix: "/production", allowedRoles: ["PRODUCTION_SUPERVISOR"] },
+  { prefix: "/auditor", allowedRoles: ["AUDITOR"] },
+  { prefix: "/dashboard", allowedRoles: ["OWNER"] },
 ];
 
 export function canAccessPath(role: UserRole, pathname: string): boolean {

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { ItemCategory, Role } from "@prisma/client";
 import {
   NewOrderWorkspace,
@@ -7,6 +8,11 @@ import { requireVerifiedUser } from "@/lib/auth";
 import { qty } from "@/lib/decimal";
 import { getItemStockMap } from "@/lib/engines/stock";
 import { prisma } from "@/lib/prisma";
+
+export const metadata: Metadata = {
+  title: "New Field Order",
+  description: "Create customer orders online or in offline mode.",
+};
 
 export const dynamic = "force-dynamic";
 

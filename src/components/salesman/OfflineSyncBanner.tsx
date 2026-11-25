@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 import { submitFieldOrderAction } from "@/actions/salesman.actions";
 import { InlineAlert } from "@/components/ui/InlineAlert";
 import {
@@ -20,7 +21,6 @@ export function OfflineSyncBanner({
   const router = useRouter();
   const [queued, setQueued] = useState<QueuedOfflineOrder[]>([]);
   const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<string | null>(null);
 
   const loadQueue = useCallback(async () => {
     const rows = await getQueuedOfflineOrders();
@@ -34,7 +34,6 @@ export function OfflineSyncBanner({
     if (rows.length === 0) return;
 
     setSyncing(true);
-    setSyncResult(null);
     let syncedCount = 0;
 
     for (const order of rows) {
@@ -66,7 +65,7 @@ export function OfflineSyncBanner({
     await loadQueue();
     setSyncing(false);
     if (syncedCount > 0) {
-      setSyncResult(`Synced ${syncedCount} offline order(s) to factory.`);
+      toast.success(`Synced ${syncedCount} offline order(s) to factory.`);
       router.refresh();
     }
   }, [loadQueue, router]);
@@ -80,16 +79,14 @@ export function OfflineSyncBanner({
     return () => window.removeEventListener("online", handleOnline);
   }, [loadQueue, syncAll]);
 
-  if (queued.length === 0 && !syncResult) return null;
+  if (queued.length === 0) return null;
 
   return (
-    <div className="space-y-2">
-      {syncResult ? <InlineAlert variant="success">{syncResult}</InlineAlert> : null}
-      {queued.length > 0 ? (
-        <InlineAlert
-          variant="warning"
-          title={`${queued.length} Offline Order(s) Queued`}
-        >
+    <div>
+      <InlineAlert
+        variant="warning"
+        title={`${queued.length} Offline Order(s) Queued`}
+      >
           <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
             <span>
               Saved locally with idempotent IDs. Will auto-sync when connected.
@@ -105,7 +102,6 @@ export function OfflineSyncBanner({
             </button>
           </div>
         </InlineAlert>
-      ) : null}
     </div>
   );
 }

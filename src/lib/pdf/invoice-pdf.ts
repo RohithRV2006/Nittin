@@ -49,46 +49,104 @@ export interface PrintableInvoice {
   irn?: string | null;
 }
 
-export function downloadGstInvoicePdf(inv: PrintableInvoice) {
+/**
+ * Formats INR strictly using ASCII "Rs. " because jsPDF built-in Helvetica uses
+ * WinAnsi encoding where Unicode ₹ causes broken glyphs and text-width clipping.
+ */
+export function formatPdfRs(value: string | number): string {
+  const num = Number(value);
+  const formatted = new Intl.NumberFormat("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(num) ? num : 0);
+  return `Rs. ${formatted}`;
+}
+
+export async function loadLogoDataUrl(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  try {
+    const res = await fetch("/nittin.png");
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () =>
+        resolve(typeof reader.result === "string" ? reader.result : null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function downloadGstInvoicePdf(inv: PrintableInvoice) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const logo = await loadLogoDataUrl();
 
-  doc.setFontSize(16);
-  doc.setFont("helvetica", "bold");
-  doc.text(inv.seller.companyName, 14, 18);
-
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.text(`GSTIN: ${inv.seller.gstin} | State: ${inv.seller.state} (${inv.seller.stateCode})`, 14, 24);
-  doc.text(inv.seller.address, 14, 29, { maxWidth: 120 });
-  if (inv.seller.phone) {
-    doc.text(`Phone: ${inv.seller.phone}`, 14, 36);
+  const textLeftX = logo ? 34 : 14;
+  if (logo) {
+    doc.addImage(logo, "PNG", 14, 12, 16, 16);
   }
 
-  doc.setFontSize(13);
   doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(35, 23, 15);
+  doc.text(inv.seller.companyName, textLeftX, 17, { maxWidth: 102 });
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(92, 71, 56);
+  doc.text(
+    `GSTIN: ${inv.seller.gstin} | State: ${inv.seller.state} (${inv.seller.stateCode})`,
+    textLeftX,
+    23
+  );
+  doc.text(inv.seller.address, textLeftX, 28, { maxWidth: 102 });
+  if (inv.seller.phone) {
+    doc.text(`Phone: ${inv.seller.phone}`, textLeftX, 36);
+  }
+
+  // Right-aligned invoice header inside 196mm margin
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(120, 53, 15);
   doc.text(
     inv.status === "CANCELLED" ? "TAX INVOICE (CANCELLED)" : "TAX INVOICE",
     196,
-    18,
+    17,
     { align: "right" }
   );
 
-  doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.text(`Invoice #: ${inv.invoiceNumber}`, 196, 25, { align: "right" });
-  doc.text(`Order Ref: ${inv.orderNumber}`, 196, 30, { align: "right" });
-  doc.text(`Date: ${inv.invoiceDate} | Due: ${inv.dueDate}`, 196, 35, { align: "right" });
+  doc.setFontSize(8.5);
+  doc.setTextColor(35, 23, 15);
+  doc.text(`Invoice #: ${inv.invoiceNumber}`, 196, 23, { align: "right" });
+  doc.text(`Order Ref: ${inv.orderNumber}`, 196, 28, { align: "right" });
+  doc.text(`Date: ${inv.invoiceDate} | Due: ${inv.dueDate}`, 196, 33, {
+    align: "right",
+  });
 
-  doc.setDrawColor(226, 232, 240);
+  doc.setDrawColor(230, 220, 203);
   doc.line(14, 42, 196, 42);
 
   doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
   doc.text("Bill To:", 14, 48);
   doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
   doc.text(inv.buyer.name, 14, 53);
-  doc.text(`GSTIN: ${inv.buyer.gstin ?? "Unregistered"} | Phone: ${inv.buyer.phone}`, 14, 58);
-  doc.text(inv.buyer.address, 14, 63, { maxWidth: 110 });
-  doc.text(`Place of Supply: ${inv.placeOfSupply} (${inv.placeOfSupplyCode})`, 14, 70);
+  doc.text(
+    `GSTIN: ${inv.buyer.gstin ?? "Unregistered"} | Phone: ${inv.buyer.phone}`,
+    14,
+    58
+  );
+  doc.text(inv.buyer.address, 14, 63, { maxWidth: 120 });
+  doc.text(
+    `Place of Supply: ${inv.placeOfSupply} (${inv.placeOfSupplyCode})`,
+    14,
+    70
+  );
 
   if (inv.irn) {
     doc.setFontSize(7.5);
@@ -97,51 +155,113 @@ export function downloadGstInvoicePdf(inv: PrintableInvoice) {
 
   autoTable(doc, {
     startY: inv.irn ? 80 : 75,
-    head: [["#", "Item", "HSN", "Qty", "Rate", "Taxable", "CGST", "SGST", "IGST", "Total"]],
+    margin: { left: 14, right: 14 },
+    head: [
+      [
+        "#",
+        "Item",
+        "HSN",
+        "Qty",
+        "Rate",
+        "Taxable",
+        "CGST",
+        "SGST",
+        "IGST",
+        "Total",
+      ],
+    ],
     body: inv.items.map((li, idx) => [
       String(idx + 1),
       li.itemName,
       li.hsnCode,
       `${Number(li.quantity).toFixed(0)} ${li.unit}`,
-      `₹${li.unitPrice}`,
-      `₹${li.taxableAmount}`,
-      `₹${li.cgstAmount}`,
-      `₹${li.sgstAmount}`,
-      `₹${li.igstAmount}`,
-      `₹${li.totalAmount}`,
+      formatPdfRs(li.unitPrice),
+      formatPdfRs(li.taxableAmount),
+      formatPdfRs(li.cgstAmount),
+      formatPdfRs(li.sgstAmount),
+      formatPdfRs(li.igstAmount),
+      formatPdfRs(li.totalAmount),
     ]),
-    styles: { fontSize: 8, cellPadding: 2.5 },
-    headStyles: { fillColor: [4, 120, 87] },
+    styles: {
+      font: "helvetica",
+      fontSize: 8,
+      cellPadding: 2.2,
+      textColor: [35, 23, 15],
+    },
+    headStyles: {
+      fillColor: [120, 53, 15],
+      textColor: [255, 253, 249],
+      fontStyle: "bold",
+    },
+    columnStyles: {
+      0: { halign: "center", cellWidth: 8 },
+      3: { halign: "right" },
+      4: { halign: "right" },
+      5: { halign: "right" },
+      6: { halign: "right" },
+      7: { halign: "right" },
+      8: { halign: "right" },
+      9: { halign: "right" },
+    },
   });
 
   const finalY =
     (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable
       ?.finalY ?? 140;
 
-  doc.setFontSize(9.5);
-  doc.setFont("helvetica", "normal");
-  doc.text(`Taxable Value: ₹${inv.taxableAmount}`, 196, finalY + 10, { align: "right" });
-  doc.text(`CGST: ₹${inv.cgstAmount}  |  SGST: ₹${inv.sgstAmount}  |  IGST: ₹${inv.igstAmount}`, 196, finalY + 16, { align: "right" });
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.text(`Invoice Total: ₹${inv.totalAmount}`, 196, finalY + 23, { align: "right" });
-
+  // Clean aligned totals table on the right side (never clips past 196mm)
   const balance = (Number(inv.totalAmount) - Number(inv.paidAmount)).toFixed(2);
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.text(`Paid: ₹${inv.paidAmount}  |  Balance Due: ₹${balance}`, 196, finalY + 29, { align: "right" });
+  autoTable(doc, {
+    startY: finalY + 6,
+    margin: { left: 118, right: 14 },
+    theme: "plain",
+    body: [
+      ["Taxable Value", formatPdfRs(inv.taxableAmount)],
+      ["CGST", formatPdfRs(inv.cgstAmount)],
+      ["SGST", formatPdfRs(inv.sgstAmount)],
+      ["IGST", formatPdfRs(inv.igstAmount)],
+      ["Invoice Total", formatPdfRs(inv.totalAmount)],
+      ["Amount Paid", formatPdfRs(inv.paidAmount)],
+      ["Balance Due", formatPdfRs(balance)],
+    ],
+    styles: {
+      font: "helvetica",
+      fontSize: 8.5,
+      cellPadding: 1.5,
+      textColor: [35, 23, 15],
+    },
+    columnStyles: {
+      0: { halign: "left", fontStyle: "normal" },
+      1: { halign: "right", fontStyle: "bold" },
+    },
+    didParseCell: (hook) => {
+      if (hook.row.index === 4) {
+        hook.cell.styles.fontSize = 10;
+        hook.cell.styles.textColor = [120, 53, 15];
+        hook.cell.styles.fontStyle = "bold";
+      }
+    },
+  });
+
+  const footerY = Math.max(
+    ((doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable
+      ?.finalY ?? finalY + 42) + 8,
+    finalY + 46
+  );
 
   if (inv.seller.bankDetails) {
     doc.setFont("helvetica", "bold");
-    doc.text("Bank Details:", 14, finalY + 38);
+    doc.setFontSize(8.5);
+    doc.text("Bank Details:", 14, finalY + 12);
     doc.setFont("helvetica", "normal");
-    doc.text(inv.seller.bankDetails, 14, finalY + 43, { maxWidth: 120 });
+    doc.setFontSize(8);
+    doc.text(inv.seller.bankDetails, 14, finalY + 17, { maxWidth: 96 });
   }
 
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.text("For " + inv.seller.companyName, 196, finalY + 48, { align: "right" });
-  doc.text("Authorized Signatory", 196, finalY + 58, { align: "right" });
+  doc.text(`For ${inv.seller.companyName}`, 196, footerY, { align: "right" });
+  doc.text("Authorized Signatory", 196, footerY + 10, { align: "right" });
 
   doc.save(`${inv.invoiceNumber.replace(/\//g, "-")}.pdf`);
 }
@@ -159,33 +279,56 @@ export interface PrintablePaymentReceipt {
   notes: string | null;
 }
 
-export function downloadPaymentReceiptPdf(rec: PrintablePaymentReceipt) {
+export async function downloadPaymentReceiptPdf(rec: PrintablePaymentReceipt) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a5" });
-  doc.setFontSize(14);
+  const logo = await loadLogoDataUrl();
+
+  const leftX = logo ? 30 : 14;
+  if (logo) {
+    doc.addImage(logo, "PNG", 14, 12, 13, 13);
+  }
+
   doc.setFont("helvetica", "bold");
-  doc.text(rec.companyName, 14, 18);
-  doc.setFontSize(9);
+  doc.setFontSize(13);
+  doc.setTextColor(35, 23, 15);
+  doc.text(rec.companyName, leftX, 17, { maxWidth: 105 });
+
   doc.setFont("helvetica", "normal");
-  doc.text(`GSTIN: ${rec.companyGstin}`, 14, 24);
-  doc.setFontSize(12);
+  doc.setFontSize(8.5);
+  doc.setTextColor(92, 71, 56);
+  doc.text(`GSTIN: ${rec.companyGstin}`, leftX, 23);
+
   doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(120, 53, 15);
   doc.text("PAYMENT RECEIPT VOUCHER", 14, 34);
 
   autoTable(doc, {
-    startY: 40,
+    startY: 39,
+    margin: { left: 14, right: 14 },
     body: [
       ["Receipt Ref", rec.receiptId.slice(0, 8).toUpperCase()],
       ["Date", rec.paymentDate],
       ["Received From", rec.customerName],
       ["Applied Invoice", rec.invoiceNumber ?? "On-Account / FIFO Settlement"],
       ["Payment Mode", rec.paymentMode.replace("_", " ")],
-      ["UTR / Reference #", rec.referenceNumber ?? "—"],
-      ["Amount Received", `₹${rec.amount}`],
-      ["Notes", rec.notes ?? "—"],
+      ["UTR / Reference #", rec.referenceNumber ?? "-"],
+      ["Amount Received", formatPdfRs(rec.amount)],
+      ["Notes", rec.notes ?? "-"],
     ],
     theme: "grid",
-    styles: { fontSize: 9 },
+    styles: {
+      font: "helvetica",
+      fontSize: 9,
+      cellPadding: 2.8,
+      textColor: [35, 23, 15],
+    },
+    columnStyles: {
+      0: { fontStyle: "bold", cellWidth: 42, fillColor: [243, 236, 224] },
+    },
   });
 
-  doc.save(`Receipt-${rec.customerName.replace(/\s+/g, "-")}-${rec.paymentDate}.pdf`);
+  doc.save(
+    `Receipt-${rec.customerName.replace(/\s+/g, "-")}-${rec.paymentDate}.pdf`
+  );
 }

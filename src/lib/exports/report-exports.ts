@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
+import { loadLogoDataUrl } from "@/lib/pdf/invoice-pdf";
 import { sanitizeSpreadsheetCell } from "@/lib/security";
 
 export function downloadCsv(
@@ -44,7 +45,7 @@ export function downloadXlsx(
   XLSX.writeFile(wb, filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`);
 }
 
-export function downloadReportPdf(
+export async function downloadReportPdf(
   filename: string,
   title: string,
   subtitle: string,
@@ -54,23 +55,43 @@ export function downloadReportPdf(
 ) {
   const orientation = headers.length > 7 ? "landscape" : "portrait";
   const doc = new jsPDF({ orientation, unit: "mm", format: "a4" });
+  const logo = await loadLogoDataUrl();
 
-  doc.setFontSize(14);
+  const leftX = logo ? 28 : 14;
+  if (logo) {
+    doc.addImage(logo, "PNG", 14, 10, 11, 11);
+  }
+
   doc.setFont("helvetica", "bold");
-  doc.text(title, 14, 16);
+  doc.setFontSize(13);
+  doc.setTextColor(35, 23, 15);
+  doc.text(title, leftX, 15);
 
-  doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.text(subtitle, 14, 22);
+  doc.setFontSize(8.5);
+  doc.setTextColor(92, 71, 56);
+  doc.text(subtitle, leftX, 20);
+
+  const sanitizePdfText = (val: string | number) =>
+    String(val).replace(/₹/g, "Rs. ");
 
   const body = totalsRow ? [...rows, totalsRow] : rows;
 
   autoTable(doc, {
-    startY: 27,
+    startY: 26,
+    margin: { left: 14, right: 14 },
     head: [headers],
-    body: body.map((r) => r.map((c) => String(c))),
-    styles: { fontSize: 7.5, cellPadding: 2 },
-    headStyles: { fillColor: [4, 120, 87] },
+    body: body.map((r) => r.map(sanitizePdfText)),
+    styles: {
+      font: "helvetica",
+      fontSize: 7.5,
+      cellPadding: 2,
+      textColor: [35, 23, 15],
+    },
+    headStyles: {
+      fillColor: [120, 53, 15],
+      textColor: [255, 253, 249],
+    },
   });
 
   doc.save(filename.endsWith(".pdf") ? filename : `${filename}.pdf`);

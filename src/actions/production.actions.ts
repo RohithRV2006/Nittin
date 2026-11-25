@@ -20,6 +20,7 @@ import {
 } from "@/lib/engines/stock";
 import { prisma } from "@/lib/prisma";
 import { convertUnit } from "@/lib/units";
+import { isIntegerUnit } from "@/lib/enums";
 import {
   bomSchema,
   cancelRunSchema,
@@ -28,7 +29,7 @@ import {
 } from "@/lib/validators/phase2";
 import type { ActionResult } from "./masters.actions";
 
-const ALLOWED_ROLES = [Role.PRODUCTION_SUPERVISOR, Role.FACTORY_ADMIN];
+const ALLOWED_ROLES = [Role.PRODUCTION_SUPERVISOR];
 
 export async function upsertBomAction(input: unknown): Promise<ActionResult> {
   try {
@@ -262,11 +263,35 @@ export async function submitProductionRunAction(
       const inputMap = new Map(v.consumptions.map((c) => [c.itemId, c]));
       const bomItemMap = new Map(bom.items.map((bi) => [bi.itemId, bi]));
 
-      // Validate all BOM lines have entries
       for (const bi of bom.items) {
-        if (!inputMap.has(bi.itemId)) {
+        const line = inputMap.get(bi.itemId);
+        if (!line) {
           throw new Error(`Missing consumption entry for ${bi.item.name}.`);
         }
+        if (
+          isIntegerUnit(line.inputUnit) &&
+          !Number.isInteger(line.actualIssuedQty)
+        ) {
+          throw new Error(
+            `${bi.item.name} (${line.inputUnit}) requires a whole number quantity.`
+          );
+        }
+        if (
+          isIntegerUnit(line.scrapInputUnit ?? line.inputUnit) &&
+          !Number.isInteger(line.scrapDamagedQty ?? 0)
+        ) {
+          throw new Error(
+            `Damaged/scrap qty for ${bi.item.name} must be a whole number.`
+          );
+        }
+      }
+      if (
+        isIntegerUnit(bom.finishedItem.unit) &&
+        !Number.isInteger(v.actualOutput)
+      ) {
+        throw new Error(
+          `Actual output (${bom.finishedItem.unit}) must be a whole number.`
+        );
       }
 
       // Case 1: Completing an existing IN_PROGRESS run

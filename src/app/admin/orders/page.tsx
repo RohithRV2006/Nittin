@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { qty } from "@/lib/decimal";
 import { getItemStockMap } from "@/lib/engines/stock";
 import { prisma } from "@/lib/prisma";
@@ -5,6 +6,11 @@ import {
   OrdersWorkspace,
   type OrdersPageData,
 } from "@/components/admin/OrdersWorkspace";
+
+export const metadata: Metadata = {
+  title: "Incoming Orders",
+  description: "Verify stock sufficiency and convert orders to GST invoices.",
+};
 
 export const dynamic = "force-dynamic";
 

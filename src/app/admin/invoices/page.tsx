@@ -1,8 +1,14 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import {
   InvoicesWorkspace,
   type InvoiceRow,
 } from "@/components/admin/InvoicesWorkspace";
+
+export const metadata: Metadata = {
+  title: "GST Invoicing & Dispatch",
+  description: "Download GST invoices, dispatch goods, and export e-Invoices.",
+};
 
 export const dynamic = "force-dynamic";
 

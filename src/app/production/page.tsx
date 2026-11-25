@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { OrderStatus, ProductionRunStatus } from "@prisma/client";
 import {
   ProductionOverviewClient,
@@ -7,6 +8,11 @@ import { qty } from "@/lib/decimal";
 import { computeRecommendedBatches } from "@/lib/engines/production";
 import { getItemStockMap } from "@/lib/engines/stock";
 import { prisma } from "@/lib/prisma";
+
+export const metadata: Metadata = {
+  title: "Production Overview",
+  description: "Completed batch runs, yield variance flags, and unit cost.",
+};
 
 export const dynamic = "force-dynamic";
 

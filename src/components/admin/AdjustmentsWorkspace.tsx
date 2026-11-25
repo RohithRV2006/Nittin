@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { UnitType } from "@prisma/client";
+import { toast } from "sonner";
 import { recordStockAdjustmentAction } from "@/actions/procurement.actions";
 import { InlineAlert } from "@/components/ui/InlineAlert";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -10,6 +11,7 @@ import { ResponsiveTable } from "@/components/ui/ResponsiveTable";
 import { SlideOverDrawer } from "@/components/ui/SlideOverDrawer";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { formatINR } from "@/lib/decimal";
+import { formatDisplayQty, isIntegerUnit } from "@/lib/enums";
 
 export interface AdjustmentsPageData {
   items: Array<{
@@ -46,18 +48,14 @@ export interface AdjustmentsPageData {
 }
 
 const inputCls =
-  "h-10 w-full rounded-lg border border-[#CBD5E1] bg-white px-3 text-sm text-[#0F172A] outline-none focus:border-[#047857] focus:ring-2 focus:ring-[#047857]/20";
-const labelCls = "mb-1 block text-xs font-medium text-[#475569]";
+  "h-10 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20";
+const labelCls = "mb-1 block text-xs font-medium text-[var(--text-secondary)]";
 
 export function AdjustmentsWorkspace({ data }: { data: AdjustmentsPageData }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [tab, setTab] = useState<"batches" | "history">("batches");
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [feedback, setFeedback] = useState<{
-    variant: "success" | "danger";
-    text: string;
-  } | null>(null);
 
   const [itemId, setItemId] = useState(data.items[0]?.id ?? "");
   const [direction, setDirection] = useState<"INCREASE" | "DECREASE">("DECREASE");
@@ -67,12 +65,13 @@ export function AdjustmentsWorkspace({ data }: { data: AdjustmentsPageData }) {
   const [expiryDate, setExpiryDate] = useState("");
   const [reason, setReason] = useState("");
 
+  const selectedItem = data.items.find((i) => i.id === itemId);
+  const intUnit = selectedItem ? isIntegerUnit(selectedItem.unit) : false;
   const lowStockItems = data.items.filter((i) => i.isLowStock);
   const expiringBatches = data.openBatches.filter((b) => b.expiringSoon);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setFeedback(null);
     startTransition(async () => {
       const res = await recordStockAdjustmentAction({
         itemId,
@@ -84,14 +83,14 @@ export function AdjustmentsWorkspace({ data }: { data: AdjustmentsPageData }) {
         reason,
       });
       if (!res.ok) {
-        setFeedback({ variant: "danger", text: res.error ?? "Adjustment failed" });
+        toast.error(res.error ?? "Adjustment failed");
         return;
       }
       setDrawerOpen(false);
       setQuantity("");
       setReason("");
       setBatchNumber("");
-      setFeedback({ variant: "success", text: "Stock adjustment recorded in ledger." });
+      toast.success("Stock adjustment recorded in ledger.");
       router.refresh();
     });
   };
@@ -99,28 +98,24 @@ export function AdjustmentsWorkspace({ data }: { data: AdjustmentsPageData }) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Stock Batches, Adjustments & Expiry Alerts"
-        subtitle="Inspect open FIFO/FEFO inventory lots and record audited stock adjustments"
+        title="Stock Batches & Adjustments"
+        subtitle="Open FIFO/FEFO lots and audited adjustments"
         actions={
           <button
             type="button"
             disabled={data.items.length === 0}
             onClick={() => setDrawerOpen(true)}
-            className="h-10 rounded-lg bg-[#047857] px-4 text-sm font-semibold text-white hover:bg-[#065F46] disabled:opacity-50"
+            className="h-10 rounded-lg bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white hover:bg-[var(--brand-hover)] disabled:opacity-50"
           >
             + Record Stock Adjustment
           </button>
         }
       />
 
-      {feedback ? (
-        <InlineAlert variant={feedback.variant}>{feedback.text}</InlineAlert>
-      ) : null}
-
       {lowStockItems.length > 0 ? (
         <InlineAlert variant="warning" title="Low-Stock Reorder Alert">
           {lowStockItems
-            .map((i) => `${i.name}: ${i.balance} ${i.unit} (reorder <= ${i.reorderLevel})`)
+            .map((i) => `${i.name}: ${formatDisplayQty(i.balance, i.unit)} ${i.unit} (reorder <= ${formatDisplayQty(i.reorderLevel, i.unit)})`)
             .join(" • ")}
         </InlineAlert>
       ) : null}
@@ -133,14 +128,14 @@ export function AdjustmentsWorkspace({ data }: { data: AdjustmentsPageData }) {
         </InlineAlert>
       ) : null}
 
-      <div className="flex gap-2 border-b border-[#E2E8F0] pb-3">
+      <div className="flex gap-2 border-b border-[var(--border-default)] pb-3">
         <button
           type="button"
           onClick={() => setTab("batches")}
           className={`h-9 rounded-lg px-3.5 text-sm font-medium ${
             tab === "batches"
-              ? "bg-[#047857] text-white"
-              : "border border-[#E2E8F0] bg-white text-[#475569]"
+              ? "bg-[var(--brand-primary)] text-white"
+              : "border border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
           }`}
         >
           Open Stock Batches ({data.openBatches.length})
@@ -150,8 +145,8 @@ export function AdjustmentsWorkspace({ data }: { data: AdjustmentsPageData }) {
           onClick={() => setTab("history")}
           className={`h-9 rounded-lg px-3.5 text-sm font-medium ${
             tab === "history"
-              ? "bg-[#047857] text-white"
-              : "border border-[#E2E8F0] bg-white text-[#475569]"
+              ? "bg-[var(--brand-primary)] text-white"
+              : "border border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
           }`}
         >
           Adjustment History ({data.adjustments.length})
@@ -207,7 +202,7 @@ export function AdjustmentsWorkspace({ data }: { data: AdjustmentsPageData }) {
               header: "Expiry",
               render: (r) =>
                 r.expiryDate ? (
-                  <span className={r.expiringSoon ? "font-semibold text-[#B91C1C]" : ""}>
+                  <span className={r.expiringSoon ? "font-semibold text-red-700 dark:text-red-400" : ""}>
                     {r.expiryDate}
                   </span>
                 ) : (
@@ -280,10 +275,14 @@ export function AdjustmentsWorkspace({ data }: { data: AdjustmentsPageData }) {
               </select>
             </div>
             <div>
-              <label className={labelCls}>Quantity</label>
+              <label className={labelCls}>
+                Quantity {selectedItem ? `(${selectedItem.unit})` : ""}
+              </label>
               <input
                 type="number"
-                step="0.001"
+                step={intUnit ? "1" : "0.001"}
+                min={intUnit ? "1" : "0.001"}
+                inputMode={intUnit ? "numeric" : "decimal"}
                 required
                 className={inputCls}
                 value={quantity}
@@ -331,7 +330,7 @@ export function AdjustmentsWorkspace({ data }: { data: AdjustmentsPageData }) {
               rows={3}
               required
               minLength={5}
-              className="w-full rounded-lg border border-[#CBD5E1] bg-white p-3 text-sm text-[#0F172A] outline-none focus:border-[#047857] focus:ring-2 focus:ring-[#047857]/20"
+              className="w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] p-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
               placeholder="Explain why stock is being adjusted..."
               value={reason}
               onChange={(e) => setReason(e.target.value)}
@@ -341,7 +340,7 @@ export function AdjustmentsWorkspace({ data }: { data: AdjustmentsPageData }) {
           <button
             type="submit"
             disabled={isPending}
-            className="h-10 w-full rounded-lg bg-[#047857] text-sm font-semibold text-white hover:bg-[#065F46]"
+            className="h-10 w-full rounded-lg bg-[var(--brand-primary)] text-sm font-semibold text-white hover:bg-[var(--brand-hover)]"
           >
             {isPending ? "Recording..." : "Commit Stock Adjustment"}
           </button>

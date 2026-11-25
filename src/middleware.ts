@@ -3,6 +3,7 @@ import { canAccessPath, ROLE_HOME_ROUTES } from "./lib/roles";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "./lib/jwt";
 
 const PUBLIC_PATHS = ["/login", "/api/health", "/api/demo/reset"];
+const STATIC_ASSET_RE = /\.(?:png|jpg|jpeg|gif|webp|svg|ico|woff|woff2)$/i;
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -10,7 +11,8 @@ export async function middleware(request: NextRequest) {
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
-    pathname === "/manifest.json"
+    pathname === "/manifest.json" ||
+    STATIC_ASSET_RE.test(pathname)
   ) {
     return NextResponse.next();
   }
@@ -47,5 +49,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico|woff|woff2)$).*)",
+  ],
 };

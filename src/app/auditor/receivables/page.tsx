@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { InvoiceStatus } from "@prisma/client";
 import {
   ReceivablesClient,
@@ -6,6 +7,11 @@ import {
 import { money } from "@/lib/decimal";
 import { parseDateRangeParams } from "@/lib/engines/reports";
 import { prisma } from "@/lib/prisma";
+
+export const metadata: Metadata = {
+  title: "Receivables & Ageing",
+  description: "Customer payment register and ageing buckets.",
+};
 
 export const dynamic = "force-dynamic";
 

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import {
   StockLedgerClient,
   type StockLedgerPageData,
@@ -6,6 +7,11 @@ import { money, qty, toDec } from "@/lib/decimal";
 import { parseDateRangeParams } from "@/lib/engines/reports";
 import { getItemStockMap } from "@/lib/engines/stock";
 import { prisma } from "@/lib/prisma";
+
+export const metadata: Metadata = {
+  title: "Stock Ledger",
+  description: "FIFO stock summary, movements, and batch reconciliation.",
+};
 
 export const dynamic = "force-dynamic";
 

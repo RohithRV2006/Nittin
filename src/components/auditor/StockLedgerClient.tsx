@@ -159,7 +159,7 @@ export function StockLedgerClient({ data }: { data: StockLedgerPageData }) {
             }}
             onPdf={() => {
               const e = getExport();
-              downloadReportPdf(
+              void downloadReportPdf(
                 `${e.filename}.pdf`,
                 e.title,
                 `Period: ${data.from} to ${data.to}`,
@@ -189,8 +189,8 @@ export function StockLedgerClient({ data }: { data: StockLedgerPageData }) {
             onClick={() => setTab("summary")}
             className={`h-9 rounded-lg px-3.5 text-xs font-medium ${
               tab === "summary"
-                ? "bg-[#047857] text-white"
-                : "border border-[#E2E8F0] bg-white text-[#475569]"
+                ? "bg-[var(--brand-primary)] text-white"
+                : "border border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
             }`}
           >
             Stock Summary ({filteredSummary.length})
@@ -200,8 +200,8 @@ export function StockLedgerClient({ data }: { data: StockLedgerPageData }) {
             onClick={() => setTab("ledger")}
             className={`h-9 rounded-lg px-3.5 text-xs font-medium ${
               tab === "ledger"
-                ? "bg-[#047857] text-white"
-                : "border border-[#E2E8F0] bg-white text-[#475569]"
+                ? "bg-[var(--brand-primary)] text-white"
+                : "border border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
             }`}
           >
             Movement Ledger ({filteredMovements.length})
@@ -215,7 +215,7 @@ export function StockLedgerClient({ data }: { data: StockLedgerPageData }) {
               setCategoryFilter(e.target.value);
               setItemFilter("ALL");
             }}
-            className="h-9 rounded-lg border border-[#CBD5E1] bg-white px-2.5 text-xs"
+            className="h-9 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-2.5 text-xs"
           >
             <option value="ALL">All Categories</option>
             <option value="RAW_MATERIAL">Raw Materials</option>
@@ -225,7 +225,7 @@ export function StockLedgerClient({ data }: { data: StockLedgerPageData }) {
           <select
             value={itemFilter}
             onChange={(e) => setItemFilter(e.target.value)}
-            className="h-9 rounded-lg border border-[#CBD5E1] bg-white px-2.5 text-xs"
+            className="h-9 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-2.5 text-xs"
           >
             <option value="ALL">All Items</option>
             {data.summaryRows.map((i) => (
@@ -254,7 +254,7 @@ export function StockLedgerClient({ data }: { data: StockLedgerPageData }) {
               key: "cat",
               header: "Category",
               render: (r) => (
-                <span className="text-xs text-[#64748B]">
+                <span className="text-xs text-[var(--text-muted)]">
                   {r.category.replace("_", " ")}
                 </span>
               ),
@@ -278,7 +278,7 @@ export function StockLedgerClient({ data }: { data: StockLedgerPageData }) {
               header: "Outward (-)",
               align: "right",
               render: (r) => (
-                <span className="text-[#B91C1C]">-{r.outwardQty}</span>
+                <span className="text-red-700 dark:text-red-400">-{r.outwardQty}</span>
               ),
             },
             {
@@ -313,7 +313,7 @@ export function StockLedgerClient({ data }: { data: StockLedgerPageData }) {
               render: (r) => (
                 <span>
                   {r.itemName}{" "}
-                  <span className="font-mono text-[11px] text-[#64748B]">
+                  <span className="font-mono text-[11px] text-[var(--text-muted)]">
                     ({r.itemCode})
                   </span>
                 </span>
@@ -372,7 +372,7 @@ export function StockLedgerClient({ data }: { data: StockLedgerPageData }) {
               key: "notes",
               header: "Source / Notes",
               render: (r) => (
-                <span className="text-xs text-[#475569]">{r.notes ?? r.referenceType}</span>
+                <span className="text-xs text-[var(--text-secondary)]">{r.notes ?? r.referenceType}</span>
               ),
             },
           ]}

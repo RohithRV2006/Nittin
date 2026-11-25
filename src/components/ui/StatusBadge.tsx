@@ -22,11 +22,16 @@ const STATUS_MAP: Record<string, { label: string; variant: StatusVariant }> = {
 };
 
 const VARIANT_STYLES: Record<StatusVariant, string> = {
-  success: "border-[#BBF7D0] bg-[#F0FDF4] text-[#15803D]",
-  warning: "border-[#FDE68A] bg-[#FFFBEB] text-[#B45309]",
-  danger: "border-[#FECACA] bg-[#FEF2F2] text-[#B91C1C]",
-  info: "border-[#BAE6FD] bg-[#F0F9FF] text-[#0369A1]",
-  neutral: "border-[#E2E8F0] bg-[#F1F5F9] text-[#475569]",
+  success:
+    "border-[#BBF7D0] bg-[#F0FDF4] text-[#15803D] dark:border-[#166534] dark:bg-[#052E16] dark:text-[#4ADE80]",
+  warning:
+    "border-[#FDE68A] bg-[#FFFBEB] text-[#B45309] dark:border-[#92400E] dark:bg-[#451A03] dark:text-[#FBBF24]",
+  danger:
+    "border-[#FECACA] bg-[#FEF2F2] text-[#B91C1C] dark:border-[#991B1B] dark:bg-[#450A0A] dark:text-[#F87171]",
+  info:
+    "border-[#FDE68A] bg-[#FEF3C7] text-[#78350F] dark:border-[#92400E] dark:bg-[#451A03] dark:text-[#FCD34D]",
+  neutral:
+    "border-[var(--border-default)] bg-[var(--bg-subtle)] text-[var(--text-secondary)]",
 };
 
 export function StatusBadge({

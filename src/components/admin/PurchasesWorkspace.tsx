@@ -3,7 +3,8 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { PaymentMode, PaymentStatus, UnitType } from "@prisma/client";
-import { PAYMENT_MODES } from "@/lib/enums";
+import { toast } from "sonner";
+import { isIntegerUnit, PAYMENT_MODES } from "@/lib/enums";
 import {
   recordPurchaseAction,
   recordSupplierPaymentAction,
@@ -77,16 +78,12 @@ function getCompatibleUnits(baseUnit: UnitType, unitsPerCarton: number | null): 
 }
 
 const inputCls =
-  "h-10 w-full rounded-lg border border-[#CBD5E1] bg-white px-3 text-sm text-[#0F172A] outline-none focus:border-[#047857] focus:ring-2 focus:ring-[#047857]/20";
-const labelCls = "mb-1 block text-xs font-medium text-[#475569]";
+  "h-10 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20";
+const labelCls = "mb-1 block text-xs font-medium text-[var(--text-secondary)]";
 
 export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [feedback, setFeedback] = useState<{
-    variant: "success" | "danger";
-    text: string;
-  } | null>(null);
 
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [supplierId, setSupplierId] = useState(data.suppliers[0]?.id ?? "");
@@ -165,7 +162,6 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
 
   const handleCreatePurchase = (e: React.FormEvent) => {
     e.preventDefault();
-    setFeedback(null);
     startTransition(async () => {
       const res = await recordPurchaseAction({
         supplierId,
@@ -174,15 +170,14 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
         lines,
       });
       if (!res.ok) {
-        setFeedback({ variant: "danger", text: res.error ?? "Failed to save purchase" });
+        toast.error(res.error ?? "Failed to save purchase");
         return;
       }
       setPurchaseOpen(false);
       setBillNumber("");
-      setFeedback({
-        variant: "success",
-        text: `Purchase ${res.data?.purchaseNumber ?? ""} recorded into FIFO Stock Ledger.`,
-      });
+      toast.success(
+        `Purchase ${res.data?.purchaseNumber ?? ""} recorded into FIFO Stock Ledger.`
+      );
       router.refresh();
     });
   };
@@ -190,7 +185,6 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
   const handleRecordPayment = (e: React.FormEvent) => {
     e.preventDefault();
     if (!payPurchase) return;
-    setFeedback(null);
     startTransition(async () => {
       const res = await recordSupplierPaymentAction({
         purchaseId: payPurchase.id,
@@ -201,14 +195,14 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
         notes: payNotes,
       });
       if (!res.ok) {
-        setFeedback({ variant: "danger", text: res.error ?? "Payment failed" });
+        toast.error(res.error ?? "Payment failed");
         return;
       }
       setPayPurchase(null);
       setPayAmount("");
       setPayRef("");
       setPayNotes("");
-      setFeedback({ variant: "success", text: "Supplier payment recorded." });
+      toast.success("Supplier payment recorded.");
       router.refresh();
     });
   };
@@ -216,14 +210,14 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Inward Procurement & Supplier Bills"
-        subtitle="Record raw material & packaging purchases into FIFO/FEFO stock batches"
+        title="Inward Procurement & Bills"
+        subtitle="Record raw material & packaging purchases into FIFO/FEFO lots"
         actions={
           <button
             type="button"
             disabled={!data.factoryConfigured || data.suppliers.length === 0 || data.items.length === 0}
             onClick={() => setPurchaseOpen(true)}
-            className="h-10 rounded-lg bg-[#047857] px-4 text-sm font-semibold text-white hover:bg-[#065F46] disabled:opacity-50"
+            className="h-10 rounded-lg bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white hover:bg-[var(--brand-hover)] disabled:opacity-50"
           >
             + Record Inward Purchase
           </button>
@@ -234,10 +228,6 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
         <InlineAlert variant="warning" title="Factory Profile Missing">
           Configure your factory GSTIN and state code under Masters before recording purchases.
         </InlineAlert>
-      ) : null}
-
-      {feedback ? (
-        <InlineAlert variant={feedback.variant}>{feedback.text}</InlineAlert>
       ) : null}
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -263,7 +253,7 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
                 const rem = money(toDec(r.totalAmount).minus(r.paidAmount));
                 setPayAmount(rem.toFixed(2));
               }}
-              className="rounded-lg border border-[#CBD5E1] px-3 py-1.5 text-xs font-medium text-[#047857]"
+              className="rounded-lg border border-[var(--border-strong)] px-3 py-1.5 text-xs font-medium text-[var(--brand-primary)]"
             >
               Record Payment
             </button>
@@ -288,7 +278,7 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
             key: "items",
             header: "Items",
             render: (r) => (
-              <span className="text-xs text-[#475569]">{r.itemsSummary}</span>
+              <span className="text-xs text-[var(--text-secondary)]">{r.itemsSummary}</span>
             ),
           },
           {
@@ -321,12 +311,12 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
                     const rem = money(toDec(r.totalAmount).minus(r.paidAmount));
                     setPayAmount(rem.toFixed(2));
                   }}
-                  className="text-xs font-medium text-[#047857] hover:underline"
+                  className="text-xs font-medium text-[var(--brand-primary)] hover:underline"
                 >
                   Pay Bill
                 </button>
               ) : (
-                <span className="text-xs text-[#64748B]">Settled</span>
+                <span className="text-xs text-[var(--text-muted)]">Settled</span>
               ),
           },
         ]}
@@ -379,7 +369,7 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-[#64748B]">
+              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Bill Line Items
               </span>
               <button
@@ -400,7 +390,7 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
                     },
                   ]);
                 }}
-                className="text-xs font-semibold text-[#047857] hover:underline"
+                className="text-xs font-semibold text-[var(--brand-primary)] hover:underline"
               >
                 + Add Line
               </button>
@@ -414,7 +404,7 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
               return (
                 <div
                   key={idx}
-                  className="space-y-2.5 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3"
+                  className="space-y-2.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-subtle)] p-3"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <select
@@ -442,7 +432,7 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
                       <button
                         type="button"
                         onClick={() => setLines(lines.filter((_, i) => i !== idx))}
-                        className="text-xs font-medium text-[#B91C1C]"
+                        className="text-xs font-medium text-red-700 dark:text-red-400"
                       >
                         Remove
                       </button>
@@ -450,10 +440,12 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
                   </div>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <div>
-                      <label className={labelCls}>Qty</label>
+                      <label className={labelCls}>Qty ({line.inputUnit})</label>
                       <input
                         type="number"
-                        step="0.001"
+                        step={isIntegerUnit(line.inputUnit) ? "1" : "0.001"}
+                        min={isIntegerUnit(line.inputUnit) ? "1" : "0.001"}
+                        inputMode={isIntegerUnit(line.inputUnit) ? "numeric" : "decimal"}
                         required
                         className={inputCls}
                         value={line.quantity}
@@ -552,22 +544,22 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
             })}
           </div>
 
-          <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3 text-sm">
+          <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-subtle)] p-3 text-sm">
             <div className="flex justify-between">
-              <span className="text-[#475569]">Taxable Value</span>
+              <span className="text-[var(--text-secondary)]">Taxable Value</span>
               <span className="tabular-nums font-medium">
                 {formatINR(draftSummary.taxable)}
               </span>
             </div>
             <div className="mt-1 flex justify-between">
-              <span className="text-[#475569]">
+              <span className="text-[var(--text-secondary)]">
                 {draftSummary.isIntraState ? "CGST + SGST" : "IGST"}
               </span>
               <span className="tabular-nums font-medium">
                 {formatINR(draftSummary.tax)}
               </span>
             </div>
-            <div className="mt-2 flex justify-between border-t border-[#E2E8F0] pt-2 font-semibold">
+            <div className="mt-2 flex justify-between border-t border-[var(--border-default)] pt-2 font-semibold">
               <span>Bill Total</span>
               <span className="tabular-nums">{formatINR(draftSummary.total)}</span>
             </div>
@@ -576,7 +568,7 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
           <button
             type="submit"
             disabled={isPending}
-            className="h-10 w-full rounded-lg bg-[#047857] text-sm font-semibold text-white hover:bg-[#065F46] disabled:opacity-60"
+            className="h-10 w-full rounded-lg bg-[var(--brand-primary)] text-sm font-semibold text-white hover:bg-[var(--brand-hover)] disabled:opacity-60"
           >
             {isPending ? "Posting to Ledger..." : "Save & Inward to Stock Ledger"}
           </button>
@@ -592,7 +584,7 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
       >
         {payPurchase ? (
           <form onSubmit={handleRecordPayment} className="space-y-4">
-            <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3 text-sm">
+            <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-subtle)] p-3 text-sm">
               <div className="flex justify-between">
                 <span>Bill Total</span>
                 <span className="tabular-nums font-medium">
@@ -603,7 +595,7 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
                 <span>Already Paid</span>
                 <span className="tabular-nums">{formatINR(payPurchase.paidAmount)}</span>
               </div>
-              <div className="mt-1 flex justify-between font-semibold text-[#B45309]">
+              <div className="mt-1 flex justify-between font-semibold text-amber-700 dark:text-amber-400">
                 <span>Balance Due</span>
                 <span className="tabular-nums">
                   {formatINR(
@@ -668,7 +660,7 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
             <button
               type="submit"
               disabled={isPending}
-              className="h-10 w-full rounded-lg bg-[#047857] text-sm font-semibold text-white hover:bg-[#065F46]"
+              className="h-10 w-full rounded-lg bg-[var(--brand-primary)] text-sm font-semibold text-white hover:bg-[var(--brand-hover)]"
             >
               {isPending ? "Saving..." : "Save Supplier Payment"}
             </button>

@@ -159,7 +159,7 @@ export function SalesRegisterClient({ data }: { data: SalesRegisterData }) {
             }}
             onPdf={() => {
               const e = getExportData();
-              downloadReportPdf(
+              void downloadReportPdf(
                 `${e.filename}.pdf`,
                 e.title,
                 `Period: ${data.from} to ${data.to}`,
@@ -185,8 +185,8 @@ export function SalesRegisterClient({ data }: { data: SalesRegisterData }) {
             onClick={() => setTab(k)}
             className={`h-9 rounded-lg px-3.5 text-xs font-medium ${
               tab === k
-                ? "bg-[#047857] text-white"
-                : "border border-[#E2E8F0] bg-white text-[#475569]"
+                ? "bg-[var(--brand-primary)] text-white"
+                : "border border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
             }`}
           >
             {label}

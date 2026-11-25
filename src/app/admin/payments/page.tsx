@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { InvoiceStatus, PaymentStatus } from "@prisma/client";
 import {
   PaymentsWorkspace,
@@ -5,6 +6,11 @@ import {
 } from "@/components/admin/PaymentsWorkspace";
 import { money } from "@/lib/decimal";
 import { prisma } from "@/lib/prisma";
+
+export const metadata: Metadata = {
+  title: "Payment Collections",
+  description: "Record customer receipts and download payment vouchers.",
+};
 
 export const dynamic = "force-dynamic";
 

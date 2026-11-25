@@ -92,7 +92,7 @@ export function GstSummaryClient({ data }: { data: GstSummaryData }) {
               )
             }
             onPdf={() =>
-              downloadReportPdf(
+              void downloadReportPdf(
                 `GSTR1-Summary-${data.from}-to-${data.to}.pdf`,
                 "GSTR-1 / GSTR-3B Outward Supplies Summary",
                 `Period: ${data.from} to ${data.to}`,
@@ -112,7 +112,7 @@ export function GstSummaryClient({ data }: { data: GstSummaryData }) {
       </div>
 
       <div className="space-y-3">
-        <h2 className="text-sm font-semibold text-[#0F172A]">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)]">
           GSTR-1 Return Table Breakdown
         </h2>
         <ResponsiveTable
@@ -167,7 +167,7 @@ export function GstSummaryClient({ data }: { data: GstSummaryData }) {
       </div>
 
       <div className="space-y-3">
-        <h2 className="text-sm font-semibold text-[#0F172A]">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)]">
           Rate-Wise Tax Summary (GSTR-3B 3.1a)
         </h2>
         <ResponsiveTable

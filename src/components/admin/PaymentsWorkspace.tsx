@@ -3,8 +3,8 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { PaymentMode } from "@prisma/client";
+import { toast } from "sonner";
 import { recordCustomerPaymentAction } from "@/actions/billing.actions";
-import { InlineAlert } from "@/components/ui/InlineAlert";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ResponsiveTable } from "@/components/ui/ResponsiveTable";
 import { SlideOverDrawer } from "@/components/ui/SlideOverDrawer";
@@ -43,16 +43,12 @@ export interface PaymentsPageData {
 }
 
 const inputCls =
-  "h-10 w-full rounded-lg border border-[#CBD5E1] bg-white px-3 text-sm text-[#0F172A] outline-none focus:border-[#047857]";
-const labelCls = "mb-1 block text-xs font-medium text-[#475569]";
+  "h-10 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--brand-primary)]";
+const labelCls = "mb-1 block text-xs font-medium text-[var(--text-secondary)]";
 
 export function PaymentsWorkspace({ data }: { data: PaymentsPageData }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [feedback, setFeedback] = useState<{
-    variant: "success" | "danger";
-    text: string;
-  } | null>(null);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [customerId, setCustomerId] = useState(data.customers[0]?.id ?? "");
@@ -93,7 +89,6 @@ export function PaymentsWorkspace({ data }: { data: PaymentsPageData }) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setFeedback(null);
     startTransition(async () => {
       const res = await recordCustomerPaymentAction({
         customerId,
@@ -105,14 +100,14 @@ export function PaymentsWorkspace({ data }: { data: PaymentsPageData }) {
         notes,
       });
       if (!res.ok) {
-        setFeedback({ variant: "danger", text: res.error ?? "Failed to record payment" });
+        toast.error(res.error ?? "Failed to record payment");
         return;
       }
       setDrawerOpen(false);
       setAmount("");
       setReferenceNumber("");
       setNotes("");
-      setFeedback({ variant: "success", text: "Customer payment recorded and allocated." });
+      toast.success("Customer payment recorded and allocated.");
       router.refresh();
     });
   };
@@ -120,8 +115,8 @@ export function PaymentsWorkspace({ data }: { data: PaymentsPageData }) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Payment Collections & Customer Balances"
-        subtitle="Record receipts against customer invoices and print payment vouchers"
+        title="Payment Collections & Balances"
+        subtitle="Record receipts against customer invoices and print vouchers"
         actions={
           <button
             type="button"
@@ -132,16 +127,12 @@ export function PaymentsWorkspace({ data }: { data: PaymentsPageData }) {
                 data.customers[0]?.outstanding
               )
             }
-            className="h-10 rounded-lg bg-[#047857] px-4 text-sm font-semibold text-white hover:bg-[#065F46] disabled:opacity-50"
+            className="h-10 rounded-lg bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white hover:bg-[var(--brand-hover)] disabled:opacity-50"
           >
             + Record Customer Payment
           </button>
         }
       />
-
-      {feedback ? (
-        <InlineAlert variant={feedback.variant}>{feedback.text}</InlineAlert>
-      ) : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="Total Posted Invoiced" value={formatINR(totals.invoiced)} />
@@ -158,7 +149,7 @@ export function PaymentsWorkspace({ data }: { data: PaymentsPageData }) {
       </div>
 
       <div className="space-y-3">
-        <h2 className="text-sm font-semibold text-[#0F172A]">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)]">
           Customer Receivables Summary
         </h2>
         <ResponsiveTable
@@ -171,7 +162,7 @@ export function PaymentsWorkspace({ data }: { data: PaymentsPageData }) {
               <button
                 type="button"
                 onClick={() => openModalForCustomer(r.id, r.outstanding)}
-                className="rounded-lg bg-[#047857] px-3 py-1.5 text-xs font-semibold text-white"
+                className="rounded-lg bg-[var(--brand-primary)] px-3 py-1.5 text-xs font-semibold text-white"
               >
                 Collect Payment
               </button>
@@ -200,7 +191,7 @@ export function PaymentsWorkspace({ data }: { data: PaymentsPageData }) {
                 <span
                   className={
                     toDec(r.outstanding).gt(0)
-                      ? "font-semibold text-[#B45309]"
+                      ? "font-semibold text-amber-700 dark:text-amber-400"
                       : "text-[#15803D]"
                   }
                 >
@@ -217,12 +208,12 @@ export function PaymentsWorkspace({ data }: { data: PaymentsPageData }) {
                   <button
                     type="button"
                     onClick={() => openModalForCustomer(r.id, r.outstanding)}
-                    className="text-xs font-semibold text-[#047857] hover:underline"
+                    className="text-xs font-semibold text-[var(--brand-primary)] hover:underline"
                   >
                     + Collect
                   </button>
                 ) : (
-                  <span className="text-xs text-[#64748B]">Settled</span>
+                  <span className="text-xs text-[var(--text-muted)]">Settled</span>
                 ),
             },
           ]}
@@ -230,7 +221,7 @@ export function PaymentsWorkspace({ data }: { data: PaymentsPageData }) {
       </div>
 
       <div className="space-y-3">
-        <h2 className="text-sm font-semibold text-[#0F172A]">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)]">
           Recent Payments Received
         </h2>
         <ResponsiveTable
@@ -272,7 +263,7 @@ export function PaymentsWorkspace({ data }: { data: PaymentsPageData }) {
                 <button
                   type="button"
                   onClick={() =>
-                    downloadPaymentReceiptPdf({
+                    void downloadPaymentReceiptPdf({
                       receiptId: r.id,
                       companyName: data.companyName,
                       companyGstin: data.companyGstin,
@@ -283,9 +274,9 @@ export function PaymentsWorkspace({ data }: { data: PaymentsPageData }) {
                       referenceNumber: r.referenceNumber,
                       invoiceNumber: r.invoiceNumber,
                       notes: r.notes,
-                    })
+                    }).catch(() => toast.error("Failed to generate receipt PDF."))
                   }
-                  className="text-xs font-medium text-[#047857] hover:underline"
+                  className="text-xs font-medium text-[var(--brand-primary)] hover:underline"
                 >
                   Receipt PDF
                 </button>
@@ -323,10 +314,10 @@ export function PaymentsWorkspace({ data }: { data: PaymentsPageData }) {
           </div>
 
           {selectedCustomer ? (
-            <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3 text-sm">
+            <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-subtle)] p-3 text-sm">
               <div className="flex justify-between">
-                <span className="text-[#475569]">Current Outstanding Balance</span>
-                <span className="font-semibold tabular-nums text-[#B45309]">
+                <span className="text-[var(--text-secondary)]">Current Outstanding Balance</span>
+                <span className="font-semibold tabular-nums text-amber-700 dark:text-amber-400">
                   {formatINR(selectedCustomer.outstanding)}
                 </span>
               </div>
@@ -411,7 +402,7 @@ export function PaymentsWorkspace({ data }: { data: PaymentsPageData }) {
           <button
             type="submit"
             disabled={isPending}
-            className="h-10 w-full rounded-lg bg-[#047857] text-sm font-semibold text-white hover:bg-[#065F46]"
+            className="h-10 w-full rounded-lg bg-[var(--brand-primary)] text-sm font-semibold text-white hover:bg-[var(--brand-hover)]"
           >
             {isPending ? "Saving..." : "Save Payment"}
           </button>

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { OrderStatus, Role } from "@prisma/client";
 import {
   SalesmanOrdersWorkspace,
@@ -6,6 +7,11 @@ import {
 import { requireVerifiedUser } from "@/lib/auth";
 import { money } from "@/lib/decimal";
 import { prisma } from "@/lib/prisma";
+
+export const metadata: Metadata = {
+  title: "My Orders & Sales",
+  description: "Track submitted orders, offline queue, and customer totals.",
+};
 
 export const dynamic = "force-dynamic";
 

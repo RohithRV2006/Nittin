@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { ProductionRunStatus } from "@prisma/client";
 import {
   ProductionRunWorkspace,
@@ -7,6 +8,11 @@ import {
 import { qty } from "@/lib/decimal";
 import { getItemStockMap } from "@/lib/engines/stock";
 import { prisma } from "@/lib/prisma";
+
+export const metadata: Metadata = {
+  title: "New Production Run",
+  description: "Issue raw materials via FIFO and log finished snack output.",
+};
 
 export const dynamic = "force-dynamic";
 
