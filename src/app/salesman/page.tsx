@@ -1,27 +1,65 @@
-import Link from "next/link";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { StatCard } from "@/components/ui/StatCard";
+import { Role } from "@prisma/client";
+import {
+  SalesmanHomeClient,
+  type SalesmanHomeData,
+} from "@/components/salesman/SalesmanHomeClient";
+import { requireVerifiedUser } from "@/lib/auth";
+import { money } from "@/lib/decimal";
+import { prisma } from "@/lib/prisma";
 
-export default function SalesmanHomePage() {
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Salesman Hub"
-        subtitle="Field order capture & recent bookings"
-        actions={
-          <Link
-            href="/salesman/new-order"
-            className="inline-flex min-h-[40px] items-center rounded-lg bg-[#047857] px-4 text-sm font-semibold text-white hover:bg-[#065F46]"
-          >
-            + New Field Order
-          </Link>
-        }
-      />
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Today's Orders" value="0" />
-        <StatCard label="Today's Booked Value" value="₹0.00" />
-        <StatCard label="Active Customers" value="0" />
-      </div>
-    </div>
-  );
+export const dynamic = "force-dynamic";
+
+export default async function SalesmanHomePage() {
+  const user = await requireVerifiedUser([Role.SALESMAN]);
+
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const [todayOrders, activeCustomersCount, recentOrders] = await Promise.all([
+    prisma.order.findMany({
+      where: {
+        salesmanId: user.id,
+        orderDate: { gte: startOfDay },
+      },
+      select: { totalAmount: true },
+    }),
+    prisma.customer.count({
+      where: {
+        active: true,
+        OR: [{ assignedSalesmanId: user.id }, { assignedSalesmanId: null }],
+      },
+    }),
+    prisma.order.findMany({
+      where: { salesmanId: user.id },
+      orderBy: { orderDate: "desc" },
+      take: 8,
+      include: {
+        customer: { select: { name: true } },
+        _count: { select: { items: true } },
+      },
+    }),
+  ]);
+
+  let todayValue = money(0);
+  for (const o of todayOrders) {
+    todayValue = money(todayValue.plus(o.totalAmount.toString()));
+  }
+
+  const data: SalesmanHomeData = {
+    salesmanName: user.name,
+    todayOrderCount: todayOrders.length,
+    todayBookedValue: todayValue.toFixed(2),
+    activeCustomersCount,
+    recentOrders: recentOrders.map((o) => ({
+      id: o.id,
+      orderNumber: o.orderNumber,
+      customerName: o.customer.name,
+      orderDate: o.orderDate.toISOString().slice(0, 10),
+      totalAmount: o.totalAmount.toFixed(2),
+      status: o.status,
+      itemCount: o._count.items,
+    })),
+  };
+
+  return <SalesmanHomeClient data={data} />;
 }
