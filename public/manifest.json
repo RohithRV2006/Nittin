@@ -1,0 +1,9 @@
+{
+  "name": "Nittin ERP",
+  "short_name": "Nittin",
+  "description": "Order-to-Audit Manufacturing ERP",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#047857"
+}
