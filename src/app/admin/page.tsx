@@ -15,8 +15,8 @@ export default async function AdminCommandCenterPage() {
 
   const [
     settings,
-    pendingOrdersCount,
-    pendingDispatchCount,
+    pendingOrders,
+    pendingDispatches,
     todayInvoices,
     todayPayments,
     items,
@@ -24,14 +24,20 @@ export default async function AdminCommandCenterPage() {
     recentAudits,
   ] = await Promise.all([
     prisma.companySettings.findUnique({ where: { id: "default" } }),
-    prisma.order.count({
+    prisma.order.findMany({
       where: { status: { in: [OrderStatus.SUBMITTED, OrderStatus.ON_HOLD] } },
+      orderBy: { orderDate: "desc" },
+      take: 5,
+      include: { customer: { select: { name: true } } },
     }),
-    prisma.invoice.count({
+    prisma.invoice.findMany({
       where: {
         status: InvoiceStatus.POSTED,
         dispatchStatus: DispatchStatus.PENDING_DISPATCH,
       },
+      orderBy: { invoiceDate: "desc" },
+      take: 5,
+      include: { customer: { select: { name: true } } },
     }),
     prisma.invoice.aggregate({
       where: { status: InvoiceStatus.POSTED, invoiceDate: { gte: startOfDay } },
@@ -64,16 +70,16 @@ export default async function AdminCommandCenterPage() {
         actions={
           <div className="flex flex-wrap gap-2">
             <Link
+              href="/admin/orders"
+              className="inline-flex h-10 items-center rounded-lg bg-[#047857] px-3.5 text-sm font-semibold text-white hover:bg-[#065F46]"
+            >
+              Incoming Orders
+            </Link>
+            <Link
               href="/admin/purchases"
               className="inline-flex h-10 items-center rounded-lg border border-[#CBD5E1] bg-white px-3.5 text-sm font-medium text-[#0F172A] hover:bg-[#F1F5F9]"
             >
               + Record Purchase
-            </Link>
-            <Link
-              href="/admin/masters"
-              className="inline-flex h-10 items-center rounded-lg bg-[#047857] px-3.5 text-sm font-semibold text-white hover:bg-[#065F46]"
-            >
-              Masters & Settings
             </Link>
           </div>
         }
@@ -100,13 +106,13 @@ export default async function AdminCommandCenterPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Pending Verification"
-          value={pendingOrdersCount}
-          tone={pendingOrdersCount > 0 ? "warning" : "default"}
+          value={pendingOrders.length}
+          tone={pendingOrders.length > 0 ? "warning" : "default"}
         />
         <StatCard
           label="Pending Dispatch"
-          value={pendingDispatchCount}
-          tone={pendingDispatchCount > 0 ? "warning" : "default"}
+          value={pendingDispatches.length}
+          tone={pendingDispatches.length > 0 ? "warning" : "default"}
         />
         <StatCard
           label="Today's Invoiced"
@@ -119,11 +125,69 @@ export default async function AdminCommandCenterPage() {
         />
       </div>
 
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="rounded-xl border border-[#E2E8F0] bg-white p-5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-[#0F172A]">
+              Orders Awaiting Verification
+            </h2>
+            <Link href="/admin/orders" className="text-xs font-medium text-[#047857] hover:underline">
+              View All →
+            </Link>
+          </div>
+          {pendingOrders.length === 0 ? (
+            <p className="mt-3 text-xs text-[#64748B]">All incoming orders are processed.</p>
+          ) : (
+            <ul className="mt-3 divide-y divide-[#F1F5F9] text-sm">
+              {pendingOrders.map((o) => (
+                <li key={o.id} className="flex items-center justify-between py-2">
+                  <span>
+                    <span className="font-mono text-xs font-semibold">{o.orderNumber}</span>{" "}
+                    — {o.customer.name}
+                  </span>
+                  <span className="tabular-nums font-medium">
+                    {formatINR(o.totalAmount.toString())}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-[#E2E8F0] bg-white p-5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-[#0F172A]">
+              Invoices Awaiting Dispatch
+            </h2>
+            <Link href="/admin/invoices" className="text-xs font-medium text-[#047857] hover:underline">
+              Dispatch Desk →
+            </Link>
+          </div>
+          {pendingDispatches.length === 0 ? (
+            <p className="mt-3 text-xs text-[#64748B]">No pending dispatches.</p>
+          ) : (
+            <ul className="mt-3 divide-y divide-[#F1F5F9] text-sm">
+              {pendingDispatches.map((inv) => (
+                <li key={inv.id} className="flex items-center justify-between py-2">
+                  <span>
+                    <span className="font-mono text-xs font-semibold">{inv.invoiceNumber}</span>{" "}
+                    — {inv.customer.name}
+                  </span>
+                  <span className="tabular-nums font-medium">
+                    {formatINR(inv.totalAmount.toString())}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
       <div className="rounded-xl border border-[#E2E8F0] bg-white p-5">
         <h2 className="text-sm font-semibold text-[#0F172A]">Recent Audit Activity</h2>
         {recentAudits.length === 0 ? (
           <p className="mt-2 text-xs text-[#64748B]">
-            No actions logged yet. Master changes, purchases, and adjustments appear here.
+            No actions logged yet.
           </p>
         ) : (
           <ul className="mt-3 divide-y divide-[#F1F5F9] text-sm">
