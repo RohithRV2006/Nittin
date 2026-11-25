@@ -16,6 +16,7 @@ import {
   FileText,
   Home,
   IndianRupee,
+  KeyRound,
   LogOut,
   Menu,
   PackageCheck,
@@ -30,7 +31,10 @@ import {
   WifiOff,
   X,
 } from "lucide-react";
-import { logoutAction } from "@/actions/auth.actions";
+import { toast } from "sonner";
+import { changeOwnPasswordAction, logoutAction } from "@/actions/auth.actions";
+import { PasswordInput } from "@/components/ui/PasswordInput";
+import { SlideOverDrawer } from "@/components/ui/SlideOverDrawer";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { ROLE_LABELS, type UserRole } from "@/lib/roles";
 
@@ -103,7 +107,8 @@ export const ROLE_NAV_ITEMS: Record<UserRole, NavItem[]> = {
   PRODUCTION_SUPERVISOR: [
     { href: "/production", label: "Floor Overview", icon: "factory", mobilePrimary: true },
     { href: "/production/new-run", label: "New Batch Run", icon: "plus", mobilePrimary: true },
-    { href: "/production/boms", label: "BOM Recipes", icon: "book", mobilePrimary: true },
+    { href: "/production/receiving", label: "Goods Receipt (GRN)", icon: "package", mobilePrimary: true },
+    { href: "/production/boms", label: "BOM Recipes", icon: "book" },
   ],
   AUDITOR: [
     { href: "/auditor", label: "Report Center", icon: "home", mobilePrimary: true },
@@ -125,6 +130,7 @@ interface AppShellProps {
   userRole: UserRole;
   companyName: string;
   isConfigured: boolean;
+  mustChangePassword?: boolean;
   children: ReactNode;
 }
 
@@ -133,11 +139,45 @@ export function AppShell({
   userRole,
   companyName,
   isConfigured,
+  mustChangePassword = false,
   children,
 }: AppShellProps) {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [online, setOnline] = useState(true);
+  const [pwdOpen, setPwdOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [pwdSaving, setPwdSaving] = useState(false);
+  const [pwdChangedLocal, setPwdChangedLocal] = useState(false);
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      toast.error("New password and confirmation do not match.");
+      return;
+    }
+    setPwdSaving(true);
+    try {
+      const res = await changeOwnPasswordAction({
+        currentPassword,
+        newPassword,
+      });
+      if (!res.ok) {
+        toast.error(res.error ?? "Failed to update password");
+        return;
+      }
+      toast.success("Password updated securely.");
+      setPwdOpen(false);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPwdChangedLocal(true);
+    } finally {
+      setPwdSaving(false);
+    }
+  };
 
   useEffect(() => {
     setOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
@@ -220,6 +260,14 @@ export function AppShell({
               {ROLE_LABELS[userRole]}
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => setPwdOpen(true)}
+            className="mb-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]"
+          >
+            <KeyRound className="h-4 w-4" />
+            Change Password
+          </button>
           <form action={logoutAction}>
             <button
               type="submit"
@@ -291,6 +339,17 @@ export function AppShell({
               <p className="mb-3 text-[11px] text-[var(--text-muted)]">
                 {ROLE_LABELS[userRole]}
               </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setDrawerOpen(false);
+                  setPwdOpen(true);
+                }}
+                className="mb-2 flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-[var(--border-default)] px-3 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
+              >
+                <KeyRound className="h-4 w-4" />
+                Change Password
+              </button>
               <form action={logoutAction}>
                 <button
                   type="submit"
@@ -370,9 +429,75 @@ export function AppShell({
 
         {/* Page Body */}
         <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-5 pb-24 sm:px-6 sm:py-6 lg:pb-8">
+          {mustChangePassword && !pwdChangedLocal ? (
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
+              <span>
+                Your password was reset by an administrator. Please set a new personal password now.
+              </span>
+              <button
+                type="button"
+                onClick={() => setPwdOpen(true)}
+                className="rounded-lg bg-[var(--brand-primary)] px-3 py-1.5 font-semibold text-white hover:bg-[var(--brand-hover)]"
+              >
+                Update Password
+              </button>
+            </div>
+          ) : null}
           {children}
         </main>
       </div>
+
+      <SlideOverDrawer
+        open={pwdOpen}
+        onClose={() => setPwdOpen(false)}
+        title="Change Account Password"
+        subtitle="Minimum 8 characters with at least one letter and one number"
+      >
+        <form onSubmit={handlePasswordSubmit} className="space-y-4">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--text-secondary)]">
+              Current Password
+            </label>
+            <PasswordInput
+              required
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--text-secondary)]">
+              New Password
+            </label>
+            <PasswordInput
+              required
+              minLength={8}
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--text-secondary)]">
+              Confirm New Password
+            </label>
+            <PasswordInput
+              required
+              minLength={8}
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={pwdSaving}
+            className="h-10 w-full rounded-lg bg-[var(--brand-primary)] text-sm font-semibold text-white hover:bg-[var(--brand-hover)] disabled:opacity-60"
+          >
+            {pwdSaving ? "Updating..." : "Save New Password"}
+          </button>
+        </form>
+      </SlideOverDrawer>
 
       {/* Mobile Bottom Navigation Bar */}
       {mobileBottomItems.length > 0 ? (

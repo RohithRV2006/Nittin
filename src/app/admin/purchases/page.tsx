@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { GrnStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   PurchasesWorkspace,
@@ -13,7 +14,7 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function AdminPurchasesPage() {
-  const [settings, suppliers, items, purchases] = await Promise.all([
+  const [settings, suppliers, items, purchases, pendingGrns] = await Promise.all([
     prisma.companySettings.findUnique({ where: { id: "default" } }),
     prisma.supplier.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
     prisma.item.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
@@ -22,6 +23,19 @@ export default async function AdminPurchasesPage() {
       include: {
         supplier: { select: { name: true } },
         items: { include: { item: { select: { name: true } } } },
+      },
+    }),
+    prisma.goodsReceipt.findMany({
+      where: { status: GrnStatus.PENDING_BILLING },
+      orderBy: { receivedDate: "desc" },
+      include: {
+        supplier: { select: { id: true, name: true } },
+        receivedBy: { select: { name: true } },
+        items: {
+          include: {
+            item: { select: { id: true, name: true, taxRate: true } },
+          },
+        },
       },
     }),
   ]);
@@ -42,6 +56,25 @@ export default async function AdminPurchasesPage() {
       unit: i.unit,
       unitsPerCarton: i.unitsPerCarton,
       taxRate: i.taxRate.toFixed(2),
+    })),
+    pendingGrns: pendingGrns.map((g) => ({
+      id: g.id,
+      grnNumber: g.grnNumber,
+      supplierId: g.supplierId,
+      supplierName: g.supplier.name,
+      challanNumber: g.challanNumber,
+      receivedDate: g.receivedDate.toISOString().slice(0, 10),
+      receivedByName: g.receivedBy.name,
+      notes: g.notes,
+      lines: g.items.map((li) => ({
+        itemId: li.itemId,
+        itemName: li.item.name,
+        quantity: li.quantity.toFixed(3),
+        inputUnit: li.unit,
+        taxRate: li.item.taxRate.toFixed(2),
+        batchNumber: li.batchNumber ?? "",
+        expiryDate: li.expiryDate ? li.expiryDate.toISOString().slice(0, 10) : "",
+      })),
     })),
     purchases: purchases.map((p) => ({
       id: p.id,

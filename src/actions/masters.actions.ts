@@ -2,12 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
-import { Role } from "@prisma/client";
+import { ResetRequestStatus, Role } from "@prisma/client";
 import { requireVerifiedUser } from "@/lib/auth";
 import { money, percent, qty } from "@/lib/decimal";
 import { writeAuditLog } from "@/lib/engines/audit";
 import { prisma } from "@/lib/prisma";
 import {
+  adminResetPasswordSchema,
   companySettingsSchema,
   createUserSchema,
   customerPriceSchema,
@@ -437,5 +438,60 @@ export async function unlockUserAction(userId: string): Promise<ActionResult> {
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Unlock failed" };
+  }
+}
+
+export async function adminResetUserPasswordAction(
+  input: unknown
+): Promise<ActionResult> {
+  try {
+    const actor = await requireVerifiedUser([Role.FACTORY_ADMIN]);
+    const parsed = adminResetPasswordSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid temporary password",
+      };
+    }
+
+    const { userId, temporaryPassword } = parsed.data;
+    const hashedPassword = await bcrypt.hash(temporaryPassword, 12);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          password: hashedPassword,
+          mustChangePassword: true,
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+          tokenVersion: { increment: 1 },
+        },
+      });
+      await tx.passwordResetRequest.updateMany({
+        where: { userId, status: ResetRequestStatus.PENDING },
+        data: {
+          status: ResetRequestStatus.COMPLETED,
+          resolvedById: actor.id,
+          resolvedAt: new Date(),
+        },
+      });
+      await writeAuditLog(tx, {
+        entityType: "USER",
+        entityId: userId,
+        action: "PASSWORD_RESET",
+        userId: actor.id,
+        changes: { mustChangePassword: true, sessionRevoked: true },
+        reason: "Admin issued temporary password reset",
+      });
+    });
+
+    revalidatePath("/admin/masters");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to reset password",
+    };
   }
 }

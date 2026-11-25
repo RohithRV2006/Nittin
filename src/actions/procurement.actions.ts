@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import {
   DocumentType,
+  GrnStatus,
   MovementType,
   PaymentStatus,
   RefType,
@@ -17,10 +18,13 @@ import {
   recordInwardBatchAndLedger,
 } from "@/lib/engines/stock";
 import { computeGstSplit } from "@/lib/engines/tax";
+import { isIntegerUnit } from "@/lib/enums";
 import { prisma } from "@/lib/prisma";
 import { convertUnit } from "@/lib/units";
 import {
+  createGoodsReceiptSchema,
   createPurchaseSchema,
+  rejectGrnSchema,
   stockAdjustmentSchema,
   supplierPaymentSchema,
 } from "@/lib/validators/phase1";
@@ -173,6 +177,25 @@ export async function recordPurchaseAction(
         });
       }
 
+      if (v.grnId) {
+        const grn = await tx.goodsReceipt.findUnique({ where: { id: v.grnId } });
+        if (!grn || grn.status !== GrnStatus.PENDING_BILLING) {
+          throw new Error("Linked floor GRN is no longer pending billing.");
+        }
+        if (grn.supplierId !== v.supplierId) {
+          throw new Error("Purchase supplier must match the linked GRN supplier.");
+        }
+        await tx.goodsReceipt.update({
+          where: { id: grn.id },
+          data: {
+            status: GrnStatus.VERIFIED,
+            verifiedById: actor.id,
+            verifiedAt: new Date(),
+            purchaseId: purchase.id,
+          },
+        });
+      }
+
       await writeAuditLog(tx, {
         entityType: "PURCHASE",
         entityId: purchase.id,
@@ -181,6 +204,7 @@ export async function recordPurchaseAction(
         changes: {
           purchaseNumber,
           billNumber: v.billNumber,
+          grnId: v.grnId || null,
           totalAmount: grandTotal.toFixed(2),
         },
       });
@@ -191,11 +215,146 @@ export async function recordPurchaseAction(
     revalidatePath("/admin/purchases");
     revalidatePath("/admin/adjustments");
     revalidatePath("/admin");
+    revalidatePath("/production/receiving");
     return { ok: true, data: result };
   } catch (err) {
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Failed to record purchase",
+    };
+  }
+}
+
+export async function createGoodsReceiptAction(
+  input: unknown
+): Promise<ActionResult<{ grnNumber: string }>> {
+  try {
+    const actor = await requireVerifiedUser([Role.PRODUCTION_SUPERVISOR]);
+    const parsed = createGoodsReceiptSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid GRN" };
+    }
+
+    const v = parsed.data;
+    const receivedDate = new Date(v.receivedDate);
+    if (Number.isNaN(receivedDate.getTime())) {
+      return { ok: false, error: "Invalid received date." };
+    }
+
+    const res = await prisma.$transaction(async (tx) => {
+      const supplier = await tx.supplier.findUnique({ where: { id: v.supplierId } });
+      if (!supplier || !supplier.active) {
+        throw new Error("Selected supplier not found or inactive.");
+      }
+
+      const dbItems = await tx.item.findMany({
+        where: { id: { in: v.lines.map((l) => l.itemId) }, active: true },
+      });
+      const itemMap = new Map(dbItems.map((i) => [i.id, i]));
+
+      const prepared = v.lines.map((line) => {
+        const item = itemMap.get(line.itemId);
+        if (!item) throw new Error("Invalid item selected in GRN.");
+        const dQty = qty(line.quantity);
+        if (isIntegerUnit(line.inputUnit) && !dQty.isInteger()) {
+          throw new Error(
+            `${item.name} uses ${line.inputUnit} and must be received as a whole number.`
+          );
+        }
+        return {
+          itemId: item.id,
+          quantity: dQty,
+          unit: line.inputUnit,
+          batchNumber: line.batchNumber || null,
+          expiryDate: line.expiryDate ? new Date(line.expiryDate) : null,
+          notes: line.notes || null,
+        };
+      });
+
+      const grnNumber = await getNextDocumentNumber(tx, DocumentType.GRN, receivedDate);
+      const grn = await tx.goodsReceipt.create({
+        data: {
+          grnNumber,
+          supplierId: supplier.id,
+          challanNumber: v.challanNumber,
+          receivedDate,
+          status: GrnStatus.PENDING_BILLING,
+          notes: v.notes || null,
+          receivedById: actor.id,
+          items: { create: prepared },
+        },
+      });
+
+      await writeAuditLog(tx, {
+        entityType: "GOODS_RECEIPT",
+        entityId: grn.id,
+        action: "CREATE",
+        userId: actor.id,
+        changes: {
+          grnNumber,
+          supplierName: supplier.name,
+          challanNumber: v.challanNumber,
+          lineCount: prepared.length,
+        },
+      });
+
+      return { grnNumber };
+    });
+
+    revalidatePath("/production/receiving");
+    revalidatePath("/admin/purchases");
+    return { ok: true, data: res };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to log GRN",
+    };
+  }
+}
+
+export async function rejectGoodsReceiptAction(
+  input: unknown
+): Promise<ActionResult> {
+  try {
+    const actor = await requireVerifiedUser([Role.FACTORY_ADMIN]);
+    const parsed = rejectGrnSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid reason" };
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const grn = await tx.goodsReceipt.findUnique({ where: { id: parsed.data.grnId } });
+      if (!grn) throw new Error("GRN not found.");
+      if (grn.status !== GrnStatus.PENDING_BILLING) {
+        throw new Error("Only pending GRNs can be rejected.");
+      }
+
+      await tx.goodsReceipt.update({
+        where: { id: grn.id },
+        data: {
+          status: GrnStatus.REJECTED,
+          verifiedById: actor.id,
+          verifiedAt: new Date(),
+          rejectionReason: parsed.data.reason,
+        },
+      });
+
+      await writeAuditLog(tx, {
+        entityType: "GOODS_RECEIPT",
+        entityId: grn.id,
+        action: "REJECT",
+        userId: actor.id,
+        reason: parsed.data.reason,
+      });
+    });
+
+    revalidatePath("/admin/purchases");
+    revalidatePath("/production/receiving");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to reject GRN",
     };
   }
 }

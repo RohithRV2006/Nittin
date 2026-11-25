@@ -8,7 +8,7 @@
 
 ## 1. System Architecture & Relational Data Model
 
-The system is built as a cloud-native, responsive ERP using **Next.js 14 (App Router & Server Actions)**, **Tailwind CSS**, and **PostgreSQL (Neon Serverless)** mediated by **Prisma ORM**.
+The system is built as a cloud-native, responsive ERP using **Next.js 15 (App Router & Server Actions)**, **Tailwind CSS v4**, and **PostgreSQL (Neon Serverless)** mediated by **Prisma ORM**.
 
 ```mermaid
 erDiagram
@@ -16,10 +16,13 @@ erDiagram
     CUSTOMER ||--o{ INVOICE : billed
     CUSTOMER ||--o{ PAYMENT : settles
     SUPPLIER ||--o{ PURCHASE : supplies
+    SUPPLIER ||--o{ GOODS_RECEIPT : delivers
+    GOODS_RECEIPT ||--o| PURCHASE : verified_into
     PURCHASE ||--|{ PURCHASE_ITEM : itemizes
     ORDER ||--o| INVOICE : converts
     INVOICE ||--|{ INVOICE_ITEM : itemizes
-    INVOICE ||--o{ CREDIT_NOTE : reverses
+    INVOICE ||--o{ DISPATCH_CHALLAN : ships
+    INVOICE ||--o{ CREDIT_NOTE : adjusts_or_reverses
     ITEM ||--o{ BOM_ITEM : recipe_ingredient
     ITEM ||--o{ BOM : finished_product
     BOM ||--o{ PRODUCTION_RUN : executes
@@ -30,13 +33,13 @@ erDiagram
 
 ### Core Architectural Decisions
 1. **Single Source of Truth (SSOT) Ledger & Lots:** There is no editable `stock` field in the catalog. All inventory balances are materialized strictly through an append-only `StockLedger` backed by FIFO/FEFO `StockBatch` lots.
-2. **Zero-Float Decimal Arithmetic & Unit Conversions:** All server math uses `decimal.js` / `Prisma.Decimal` (`Decimal(12, 2)` currency, `Decimal(12, 3)` quantities) with deterministic conversions across `kg`/`g`, `L`/`ml`, `piece`/`packet`/`carton`.
-3. **Role-Based Isolation:** Dynamic role layouts:
-   * **Salesman:** High-contrast, mobile-first view for fast order entry under poor network conditions (with idempotent offline sync).
-   * **Factory Admin:** Order approval, stock sufficiency verification, GST tax invoicing, dispatch, procurement, and payment logging.
-   * **Production Supervisor:** Recipe (BOM) management, daily run logging, variance tracking.
-   * **Auditor / Accountant:** Read-only access to all 6 monthly reports (Sales, GST, Purchase, Stock, Production, Receivables) with Excel/CSV and PDF export.
-   * **Owner:** Executive dashboard with variance alerts, margin analysis, and receivables.
+2. **Zero-Float Decimal Arithmetic & Unit Conversions:** All server math uses `decimal.js` / `Prisma.Decimal` (`Decimal(12, 2)` currency, `Decimal(12, 3)` quantities) with whole-number enforcement on discrete units (`PIECE`, `PACKET`, `CARTON`) and deterministic conversions across `kg`/`g`, `L`/`ml`, and `carton`/`packet`.
+3. **Strict 1-Role-Per-Portal Separation:**
+   * **Salesman (`/salesman/*`):** High-contrast, mobile-first view for fast order entry with idempotent offline sync.
+   * **Factory Admin (`/admin/*`):** Order approval, stock & credit verification, GST tax invoicing, partial/full dispatch, GRN billing verification, procurement, and payments.
+   * **Production Supervisor (`/production/*`):** Recipe (BOM) management, daily run logging, variance tracking, and floor Goods Receipt (GRN) gate logging (without vendor pricing access).
+   * **Auditor / Accountant (`/auditor/*`):** Strictly read-only access to all 6 statutory reports, audit trail, and Excel/CSV/PDF/Tally exports.
+   * **Owner (`/dashboard`):** Standalone executive dashboard with variance alerts, margin analysis, and receivables.
 
 ---
 
@@ -51,15 +54,15 @@ Every stock movement writes to `StockLedger` referencing its originating documen
 * **`PURCHASE_RECEIPT` (+):** Triggered when inward raw materials/packaging are verified.
 * **`PRODUCTION_ISSUE` (-):** Triggered when raw materials are issued to the production floor.
 * **`PRODUCTION_OUTPUT` (+):** Triggered when finished goods are yielded from a production run.
-* **`DISPATCH_SALE` (-):** Triggered upon invoice dispatch to a customer.
+* **`DISPATCH_SALE` (-):** Triggered per delivery trip via `DispatchChallan` (supports partial and full FEFO dispatch).
+* **`SALES_RETURN` (+):** Restocks `RESALEABLE` sales return items from Credit Notes (`DAMAGED` returns are excluded from sellable stock batches).
 * **`SCRAP_DAMAGE` (-):** Written off for damaged packaging or production scrap.
 
 ### 2.2 Atomic Execution
-When an admin approves and dispatches an invoice:
-1. `Invoice` record status changes to `POSTED`.
-2. `Order` status updates to `DISPATCHED`.
-3. Outward debit rows are inserted into `StockLedger`.
-All three steps execute inside a single atomic database transaction (`prisma.$transaction`).
+When an admin dispatches an invoice (in one trip or partial splits):
+1. `DispatchChallan` (`CH/YY-YY/NNNN`) is created and `InvoiceItem.dispatchedQty` increments.
+2. `Invoice.dispatchStatus` updates to `PARTIALLY_DISPATCHED` or `DISPATCHED` (`Order.status` moves to `DISPATCHED` once complete).
+3. Outward FEFO debit rows are inserted into `StockLedger` inside a single `prisma.$transaction`.
 
 ---
 
@@ -106,7 +109,7 @@ Dividing by **actual good packets (188)** rather than standard batch size (200) 
    * **Intra-State (Tamil Nadu):** 5% GST split equally as **2.5% CGST** and **2.5% SGST**.
    * **Inter-State (e.g., Karnataka):** 5% charged as **IGST**.
 2. **Immutable Audit Trail & Statutory Exports:**
-   * Invoices and production runs cannot be deleted. Edits are recorded in `AuditLog` with user and timestamp, and posted invoices are reversed via `CreditNote` (restocking finished goods **only** if `dispatchStatus === 'DISPATCHED'`).
+   * Invoices and production runs cannot be deleted. Edits are recorded in `AuditLog` with user and timestamp; posted invoices are cancelled or returned via `CreditNote` (cancellations restock only dispatched quantities; sales returns restock only `RESALEABLE` items).
    * GSTR-1 and GSTR-3B summary formats map directly to statutory Indian tax returns, alongside Tally XML/Excel voucher exports and mocked NIC e-Invoice (IRN/QR) & e-Way Bill JSON payloads.
 
 ---

@@ -35,6 +35,7 @@ export async function PortalShell({
           : "Factory Setup Pending"
       }
       isConfigured={Boolean(settings?.isConfigured)}
+      mustChangePassword={user.mustChangePassword}
     >
       {children}
     </AppShell>

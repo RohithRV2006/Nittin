@@ -68,6 +68,7 @@ Stores system accounts and role designations for access control.
 | `role` | `Role` (Enum) | Not Null | `SALESMAN`, `FACTORY_ADMIN`, `PRODUCTION_SUPERVISOR`, `AUDITOR`, `OWNER`. |
 | `phone` | `String` | Nullable | Contact number for SMS / WhatsApp dispatch. |
 | `active` | `Boolean` | Default: `true` | Account activation state (soft deactivation; checked on every server action). |
+| `mustChangePassword` | `Boolean` | Default: `false` | True after admin password reset; prompts user to set a personal password. |
 | `failedLoginAttempts` | `Int` | Default: `0` | Serverless-safe counter for brute-force lockout. |
 | `lockedUntil` | `DateTime` | Nullable | Account lockout expiry timestamp after consecutive failed logins. |
 | `tokenVersion` | `Int` | Default: `1` | Incremented on password reset/deactivation to revoke active JWT sessions immediately. |
@@ -116,8 +117,13 @@ Master directory of raw material and packaging vendors.
 Inward procurement bills from suppliers for raw materials and packaging, plus vendor payment tracking.
 * **`Purchase` Table:**
   * `id`: UUID (PK)
-  * `purchaseNumber`: String (Unique, e.g., `PUR-2024-001`)
+  * `purchaseNumber`: String (Unique, e.g., `PUR/2026-27/0001`)
   * `supplierId`: FK $\rightarrow$ `Supplier.id`
+
+### 3.3B `GoodsReceipt` & `GoodsReceiptItem` (Floor Gate Intake)
+Floor Supervisor inward receiving (`GRN/YY-YY/NNNN`) awaiting Factory Admin verification into a `Purchase` bill (`PENDING_BILLING`, `VERIFIED`, `REJECTED`).
+* `GoodsReceipt`: `id`, `grnNumber` (Unique), `supplierId`, `challanNumber`, `receivedDate`, `status`, `receivedById`, `verifiedById`, `purchaseId` (Unique FK $\rightarrow$ `Purchase.id`), `rejectionReason`.
+* `GoodsReceiptItem`: `id`, `grnId`, `itemId`, `quantity`, `unit`, `batchNumber`, `expiryDate`.
   * `billNumber`: String (Not Null, vendor invoice/bill reference)
   * `purchaseDate`: DateTime
   * `placeOfSupply`: String (Not Null)
@@ -260,7 +266,7 @@ Statutory GST Tax Invoices generated upon order approval.
   * `paidAmount`: `Decimal(12, 2)` (Default: `0.00`)
   * `paymentStatus`: `PaymentStatus` (`UNPAID`, `PARTIAL`, `PAID`; Default: `UNPAID`)
   * `status`: `InvoiceStatus` (`POSTED`, `CANCELLED`)
-  * `dispatchStatus`: `DispatchStatus` (`PENDING_DISPATCH`, `DISPATCHED`)
+  * `dispatchStatus`: `DispatchStatus` (`PENDING_DISPATCH`, `PARTIALLY_DISPATCHED`, `DISPATCHED`)
   * `dispatchedAt`: DateTime (Nullable)
   * `dispatchedById`: FK $\rightarrow$ `User.id` (Nullable)
   * `eInvoiceMeta`: `Json` (Nullable — stores mocked IRN hash, AckNo, AckDt, QR payload & e-Way Bill JSON metadata)
@@ -270,6 +276,7 @@ Statutory GST Tax Invoices generated upon order approval.
   * `itemId`: FK $\rightarrow$ `Item.id`
   * `hsnCode`: String
   * `quantity`: `Decimal(12, 3)`
+  * `dispatchedQty`: `Decimal(12, 3)` (Default: `0.000` — cumulative qty dispatched across challans)
   * `unitPrice`: `Decimal(12, 2)`
   * `taxRate`: `Decimal(5, 2)`
   * `taxableAmount`: `Decimal(12, 2)`
@@ -277,19 +284,27 @@ Statutory GST Tax Invoices generated upon order approval.
   * `sgstAmount`: `Decimal(12, 2)`
   * `igstAmount`: `Decimal(12, 2)`
   * `totalAmount`: `Decimal(12, 2)`
-* **`CreditNote` Table (Reversal Tracking):**
+* **`DispatchChallan` & `DispatchChallanItem` Tables (Multi-Trip / Partial Dispatch):**
+  * `DispatchChallan`: `id`, `challanNumber` (`CH/YY-YY/NNNN`), `invoiceId`, `dispatchedById`, `dispatchedAt`, `vehicleNumber`, `notes`.
+  * `DispatchChallanItem`: `id`, `challanId`, `invoiceItemId`, `itemId`, `quantity`.
+* **`CreditNote` & `CreditNoteItem` Tables (Cancellations & Sales Returns):**
   * `id`: UUID (PK)
-  * `creditNoteNumber`: String (Unique, e.g., `CN/2024-25/0001`)
+  * `creditNoteNumber`: String (Unique, e.g., `CN/2026-27/0001`)
   * `invoiceId`: FK $\rightarrow$ `Invoice.id`
+  * `type`: `CreditNoteType` (`CANCELLATION`, `SALES_RETURN`)
   * `taxableAmount`: `Decimal(12, 2)`
   * `cgstAmount`: `Decimal(12, 2)`
   * `sgstAmount`: `Decimal(12, 2)`
   * `igstAmount`: `Decimal(12, 2)`
   * `amount`: `Decimal(12, 2)`
-  * `restocked`: Boolean (True only if the invoice had already been dispatched)
-  * `reason`: String (Documented cancellation explanation)
+  * `restocked`: Boolean (True if any dispatched/resaleable stock was restored)
+  * `reason`: String (Documented cancellation or return explanation)
   * `issuedById`: FK $\rightarrow$ `User.id`
   * `issuedAt`: DateTime
+  * `CreditNoteItem`: `id`, `creditNoteId`, `invoiceItemId`, `itemId`, `returnedQty`, `condition` (`RESALEABLE` | `DAMAGED`), `taxableAmount`, GST breakdown, `totalAmount`.
+
+### 3.8A `PasswordResetRequest`
+Tracks self-service Forgot Password requests submitted from `/login` (`PENDING`, `COMPLETED`, `CANCELLED`) until fulfilled or resolved by `FACTORY_ADMIN`.
 
 ### 3.9 `Payment`
 Payment collections recorded against customer invoices.
@@ -327,10 +342,10 @@ Every physical inventory increment or decrement writes an immutable row here.
 | `timestamp` | `DateTime` | Default: `now()` | Exact time movement was committed. |
 | `itemId` | `String` | FK $\rightarrow$ `Item.id` | Inventory item moved. |
 | `batchId` | `String` | FK $\rightarrow$ `StockBatch.id`, Nullable | Specific FIFO/FEFO batch debited or credited. |
-| `movementType` | `MovementType` | Not Null | `OPENING_BALANCE`, `PURCHASE_RECEIPT`, `PRODUCTION_ISSUE`, `PRODUCTION_OUTPUT`, `DISPATCH_SALE`, `SCRAP_DAMAGE`, `STOCK_ADJUSTMENT`. |
+| `movementType` | `MovementType` | Not Null | `OPENING_BALANCE`, `PURCHASE_RECEIPT`, `PRODUCTION_ISSUE`, `PRODUCTION_OUTPUT`, `DISPATCH_SALE`, `SALES_RETURN`, `SCRAP_DAMAGE`, `STOCK_ADJUSTMENT`. |
 | `quantity` | `Decimal(12, 3)` | Signed | **Positive** for additions, **Negative** for reductions. |
 | `unit` | `UnitType` | Not Null | Base unit of measure (`Item.unit`). |
-| `referenceType` | `RefType` | Not Null | `OPENING`, `PURCHASE`, `PRODUCTION_RUN`, `INVOICE`, `CREDIT_NOTE`, `ADJUSTMENT`. |
+| `referenceType` | `RefType` | Not Null | `OPENING`, `PURCHASE`, `PRODUCTION_RUN`, `INVOICE`, `DISPATCH_CHALLAN`, `CREDIT_NOTE`, `GRN`, `ADJUSTMENT`. |
 | `referenceId` | `String` | Not Null | Foreign ID of the source transaction document. |
 | `balanceAfter` | `Decimal(12, 3)` | Not Null | Snapshot of running closing balance post-transaction. |
 | `unitRate` | `Decimal(12, 2)` | Nullable | Valuation unit cost under FIFO. |

@@ -71,7 +71,12 @@ export default async function OwnerDashboardPage() {
     }),
     prisma.invoice.findMany({
       where: { status: InvoiceStatus.POSTED },
-      select: { customerId: true, totalAmount: true, paidAmount: true },
+      select: {
+        customerId: true,
+        totalAmount: true,
+        paidAmount: true,
+        creditNotes: { select: { amount: true } },
+      },
     }),
     prisma.customer.findMany({
       where: { active: true },
@@ -114,7 +119,13 @@ export default async function OwnerDashboardPage() {
   const dueByCustomer = new Map<string, ReturnType<typeof money>>();
   let totalReceivables = money(0);
   for (const inv of postedInvoices) {
-    const due = money(inv.totalAmount.toString()).minus(inv.paidAmount.toString());
+    let cnSum = money(0);
+    for (const cn of inv.creditNotes) {
+      cnSum = money(cnSum.plus(cn.amount.toString()));
+    }
+    const due = money(inv.totalAmount.toString())
+      .minus(cnSum)
+      .minus(inv.paidAmount.toString());
     if (due.gt(0)) {
       totalReceivables = money(totalReceivables.plus(due));
       dueByCustomer.set(

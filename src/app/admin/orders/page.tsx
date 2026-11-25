@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { qty } from "@/lib/decimal";
+import { InvoiceStatus } from "@prisma/client";
+import { money, qty } from "@/lib/decimal";
 import { getItemStockMap } from "@/lib/engines/stock";
 import { prisma } from "@/lib/prisma";
 import {
@@ -15,14 +16,21 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function AdminOrdersPage() {
-  const [settings, orders, stockMap] = await Promise.all([
+  const [settings, orders, stockMap, postedInvoices] = await Promise.all([
     prisma.companySettings.findUnique({ where: { id: "default" } }),
     prisma.order.findMany({
       orderBy: { orderDate: "desc" },
       include: {
         salesman: { select: { name: true } },
         customer: {
-          select: { name: true, state: true, stateCode: true, gstin: true },
+          select: {
+            id: true,
+            name: true,
+            state: true,
+            stateCode: true,
+            gstin: true,
+            creditLimit: true,
+          },
         },
         invoice: { select: { invoiceNumber: true } },
         items: {
@@ -35,7 +43,31 @@ export default async function AdminOrdersPage() {
       },
     }),
     getItemStockMap(prisma),
+    prisma.invoice.findMany({
+      where: { status: InvoiceStatus.POSTED },
+      select: {
+        customerId: true,
+        totalAmount: true,
+        paidAmount: true,
+        creditNotes: { select: { amount: true } },
+      },
+    }),
   ]);
+
+  const dueByCustomer = new Map<string, ReturnType<typeof money>>();
+  for (const inv of postedInvoices) {
+    let cnSum = money(0);
+    for (const cn of inv.creditNotes) cnSum = money(cnSum.plus(cn.amount.toString()));
+    const due = money(inv.totalAmount.toString())
+      .minus(cnSum)
+      .minus(inv.paidAmount.toString());
+    if (due.gt(0)) {
+      dueByCustomer.set(
+        inv.customerId,
+        money((dueByCustomer.get(inv.customerId) ?? money(0)).plus(due))
+      );
+    }
+  }
 
   const data: OrdersPageData = {
     factoryConfigured: Boolean(settings?.isConfigured && settings.stateCode),
@@ -49,6 +81,8 @@ export default async function AdminOrdersPage() {
       customerState: o.customer.state,
       customerStateCode: o.customer.stateCode,
       customerGstin: o.customer.gstin,
+      customerCreditLimit: o.customer.creditLimit.toFixed(2),
+      customerCurrentDue: (dueByCustomer.get(o.customer.id) ?? money(0)).toFixed(2),
       status: o.status,
       totalAmount: o.totalAmount.toFixed(2),
       notes: o.notes,

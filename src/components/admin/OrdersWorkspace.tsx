@@ -28,6 +28,8 @@ export interface AdminOrderRow {
   customerState: string;
   customerStateCode: string;
   customerGstin: string | null;
+  customerCreditLimit: string;
+  customerCurrentDue: string;
   status: OrderStatus;
   totalAmount: string;
   notes: string | null;
@@ -348,6 +350,17 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
                 Warehouse inventory covers this entire order. Ready to raise GST Tax Invoice.
               </InlineAlert>
             )}
+
+            {Number(selected.customerCreditLimit) > 0 &&
+            Number(selected.customerCurrentDue) +
+              Number(verificationPreview.total.toString()) >
+              Number(selected.customerCreditLimit) ? (
+              <InlineAlert variant="warning" title="Credit Limit Exceeded">
+                Current due ({formatINR(selected.customerCurrentDue)}) + order (
+                {formatINR(verificationPreview.total)}) exceeds customer limit of{" "}
+                {formatINR(selected.customerCreditLimit)}.
+              </InlineAlert>
+            ) : null}
 
             <div className="space-y-3">
               {verificationPreview.lines.map(

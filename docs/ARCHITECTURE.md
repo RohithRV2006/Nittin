@@ -30,7 +30,7 @@ flowchart TD
         StaticAssets["Static Asset CDN (Next.js Bundles, Tailwind CSS)"]
     end
 
-    subgraph ApplicationLayer ["Tier 3: Full-Stack Application Layer (Next.js 14 App Router)"]
+    subgraph ApplicationLayer ["Tier 3: Full-Stack Application Layer (Next.js 15 App Router)"]
         subgraph ServerActions ["Server Actions & API Handlers"]
             OrderActions["order.actions.ts"]
             BillingActions["billing.actions.ts"]
