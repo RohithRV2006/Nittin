@@ -1,35 +1,125 @@
-import Link from "next/link";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { InvoiceStatus, ProductionRunStatus } from "@prisma/client";
+import {
+  AuditorCenterClient,
+  type AuditorCenterData,
+} from "@/components/auditor/AuditorCenterClient";
+import { money } from "@/lib/decimal";
+import { parseDateRangeParams } from "@/lib/engines/reports";
+import { prisma } from "@/lib/prisma";
 
-const REPORTS = [
-  { href: "/auditor/sales-register", title: "Sales Register", desc: "Customer-wise & product-wise outward supplies" },
-  { href: "/auditor/gst-summary", title: "GST Summary (GSTR-1 / 3B)", desc: "B2B, B2C, Credit Notes & tax rate summary" },
-  { href: "/auditor/purchase-register", title: "Purchase Register", desc: "Supplier inward bills & input GST" },
-  { href: "/auditor/stock-ledger", title: "Stock Summary & Ledger", desc: "Opening, inward, outward, closing & batch balances" },
-  { href: "/auditor/production-report", title: "Production Variance & Costing", desc: "Planned vs actual consumption, yield & cost/packet" },
-  { href: "/auditor/receivables", title: "Receivables & Collections", desc: "Customer collections & 0-30 / 31-60 / 61-90 / 90+ ageing" },
-  { href: "/auditor/audit-log", title: "Audit Trail", desc: "Immutable log of edits, overrides & cancellations" },
-];
+export const dynamic = "force-dynamic";
 
-export default function AuditorCenterPage() {
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Auditor Workspace & Report Center"
-        subtitle="Read-only statutory statements, ledger reconciliations, Excel/CSV/PDF & Tally exports"
-      />
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {REPORTS.map((r) => (
-          <Link
-            key={r.href}
-            href={r.href}
-            className="rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#047857]"
-          >
-            <h2 className="text-sm font-semibold text-[#0F172A]">{r.title}</h2>
-            <p className="mt-1 text-xs text-[#64748B]">{r.desc}</p>
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
+export default async function AuditorCenterPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string; fy?: string }>;
+}) {
+  const filter = parseDateRangeParams(await searchParams);
+
+  const [settings, invoices, purchases, payments, runs, batches] =
+    await Promise.all([
+      prisma.companySettings.findUnique({ where: { id: "default" } }),
+      prisma.invoice.findMany({
+        where: {
+          status: InvoiceStatus.POSTED,
+          invoiceDate: { gte: filter.fromDate, lte: filter.toDate },
+        },
+        include: { customer: { select: { name: true, gstin: true } } },
+        orderBy: { invoiceDate: "asc" },
+      }),
+      prisma.purchase.findMany({
+        where: {
+          purchaseDate: { gte: filter.fromDate, lte: filter.toDate },
+        },
+        include: { supplier: { select: { name: true, gstin: true } } },
+        orderBy: { purchaseDate: "asc" },
+      }),
+      prisma.payment.findMany({
+        where: {
+          paymentDate: { gte: filter.fromDate, lte: filter.toDate },
+        },
+        include: {
+          customer: { select: { name: true } },
+          invoice: { select: { invoiceNumber: true } },
+        },
+        orderBy: { paymentDate: "asc" },
+      }),
+      prisma.productionRun.findMany({
+        where: {
+          status: ProductionRunStatus.COMPLETED,
+          runDate: { gte: filter.fromDate, lte: filter.toDate },
+        },
+        select: { varianceFlagged: true },
+      }),
+      prisma.stockBatch.findMany({
+        where: { remainingQty: { gt: 0 } },
+        select: { remainingQty: true, unitRate: true },
+      }),
+    ]);
+
+  let salesTotal = money(0);
+  for (const i of invoices) {
+    salesTotal = money(salesTotal.plus(i.totalAmount.toString()));
+  }
+  let purchaseTotal = money(0);
+  for (const p of purchases) {
+    purchaseTotal = money(purchaseTotal.plus(p.totalAmount.toString()));
+  }
+  let collectionsTotal = money(0);
+  for (const pay of payments) {
+    collectionsTotal = money(collectionsTotal.plus(pay.amount.toString()));
+  }
+  let stockValuation = money(0);
+  for (const b of batches) {
+    stockValuation = money(
+      stockValuation.plus(money(b.remainingQty.toString()).mul(b.unitRate.toString()))
+    );
+  }
+
+  const data: AuditorCenterData = {
+    from: filter.from,
+    to: filter.to,
+    companyName: settings?.companyName ?? "Factory",
+    kpis: {
+      salesTotal: salesTotal.toFixed(2),
+      purchaseTotal: purchaseTotal.toFixed(2),
+      collectionsTotal: collectionsTotal.toFixed(2),
+      productionRunsCount: runs.length,
+      varianceFlaggedCount: runs.filter((r) => r.varianceFlagged).length,
+      stockValuation: stockValuation.toFixed(2),
+    },
+    tallyInvoices: invoices.map((i) => ({
+      invoiceNumber: i.invoiceNumber,
+      date: i.invoiceDate.toISOString().slice(0, 10),
+      partyName: i.customer.name,
+      partyGstin: i.customer.gstin,
+      taxableAmount: i.taxableAmount.toFixed(2),
+      cgstAmount: i.cgstAmount.toFixed(2),
+      sgstAmount: i.sgstAmount.toFixed(2),
+      igstAmount: i.igstAmount.toFixed(2),
+      totalAmount: i.totalAmount.toFixed(2),
+    })),
+    tallyPurchases: purchases.map((p) => ({
+      purchaseNumber: p.purchaseNumber,
+      billNumber: p.billNumber,
+      date: p.purchaseDate.toISOString().slice(0, 10),
+      supplierName: p.supplier.name,
+      supplierGstin: p.supplier.gstin,
+      taxableAmount: p.taxableAmount.toFixed(2),
+      cgstAmount: p.cgstAmount.toFixed(2),
+      sgstAmount: p.sgstAmount.toFixed(2),
+      igstAmount: p.igstAmount.toFixed(2),
+      totalAmount: p.totalAmount.toFixed(2),
+    })),
+    tallyReceipts: payments.map((p) => ({
+      receiptRef: p.referenceNumber || p.id.slice(0, 8).toUpperCase(),
+      date: p.paymentDate.toISOString().slice(0, 10),
+      customerName: p.customer.name,
+      paymentMode: p.paymentMode,
+      amount: p.amount.toFixed(2),
+      invoiceNumber: p.invoice?.invoiceNumber ?? null,
+    })),
+  };
+
+  return <AuditorCenterClient data={data} />;
 }
