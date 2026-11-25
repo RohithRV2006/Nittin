@@ -1,0 +1,111 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { RefreshCw } from "lucide-react";
+import { submitFieldOrderAction } from "@/actions/salesman.actions";
+import { InlineAlert } from "@/components/ui/InlineAlert";
+import {
+  enqueueOfflineOrder,
+  getQueuedOfflineOrders,
+  removeQueuedOfflineOrder,
+  type QueuedOfflineOrder,
+} from "@/lib/offline-orders";
+
+export function OfflineSyncBanner({
+  onQueueChanged,
+}: {
+  onQueueChanged?: (orders: QueuedOfflineOrder[]) => void;
+}) {
+  const router = useRouter();
+  const [queued, setQueued] = useState<QueuedOfflineOrder[]>([]);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+
+  const loadQueue = useCallback(async () => {
+    const rows = await getQueuedOfflineOrders();
+    setQueued(rows);
+    onQueueChanged?.(rows);
+  }, [onQueueChanged]);
+
+  const syncAll = useCallback(async () => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+    const rows = await getQueuedOfflineOrders();
+    if (rows.length === 0) return;
+
+    setSyncing(true);
+    setSyncResult(null);
+    let syncedCount = 0;
+
+    for (const order of rows) {
+      try {
+        const res = await submitFieldOrderAction({
+          clientRequestId: order.clientRequestId,
+          customerId: order.customerId,
+          notes: order.notes,
+          items: order.items.map((l) => ({
+            itemId: l.itemId,
+            quantity: l.quantity,
+            inputUnit: l.inputUnit,
+          })),
+        });
+        if (res.ok) {
+          await removeQueuedOfflineOrder(order.clientRequestId);
+          syncedCount += 1;
+        } else {
+          await enqueueOfflineOrder({
+            ...order,
+            lastError: res.error ?? "Sync failed",
+          });
+        }
+      } catch {
+        // Network still unstable; keep queued
+      }
+    }
+
+    await loadQueue();
+    setSyncing(false);
+    if (syncedCount > 0) {
+      setSyncResult(`Synced ${syncedCount} offline order(s) to factory.`);
+      router.refresh();
+    }
+  }, [loadQueue, router]);
+
+  useEffect(() => {
+    loadQueue();
+    const handleOnline = () => {
+      void syncAll();
+    };
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [loadQueue, syncAll]);
+
+  if (queued.length === 0 && !syncResult) return null;
+
+  return (
+    <div className="space-y-2">
+      {syncResult ? <InlineAlert variant="success">{syncResult}</InlineAlert> : null}
+      {queued.length > 0 ? (
+        <InlineAlert
+          variant="warning"
+          title={`${queued.length} Offline Order(s) Queued`}
+        >
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+            <span>
+              Saved locally with idempotent IDs. Will auto-sync when connected.
+            </span>
+            <button
+              type="button"
+              disabled={syncing}
+              onClick={() => void syncAll()}
+              className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg bg-[#B45309] px-3 text-xs font-semibold text-white hover:bg-[#92400E] disabled:opacity-60"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} />
+              {syncing ? "Syncing..." : "Sync Now"}
+            </button>
+          </div>
+        </InlineAlert>
+      ) : null}
+    </div>
+  );
+}
