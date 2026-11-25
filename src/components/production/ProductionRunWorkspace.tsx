@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ItemCategory, UnitType } from "@prisma/client";
+import type { ItemCategory, UnitType } from "@prisma/client";
 import Decimal from "decimal.js";
 import { submitProductionRunAction } from "@/actions/production.actions";
 import { InlineAlert } from "@/components/ui/InlineAlert";
@@ -58,18 +58,18 @@ interface LineState {
 }
 
 function getCompatibleUnits(baseUnit: UnitType, unitsPerCarton: number | null): UnitType[] {
-  if (baseUnit === UnitType.KG || baseUnit === UnitType.GRAM) {
-    return [UnitType.KG, UnitType.GRAM];
+  if (baseUnit === "KG" || baseUnit === "GRAM") {
+    return ["KG", "GRAM"];
   }
-  if (baseUnit === UnitType.LITRE || baseUnit === UnitType.ML) {
-    return [UnitType.LITRE, UnitType.ML];
+  if (baseUnit === "LITRE" || baseUnit === "ML") {
+    return ["LITRE", "ML"];
   }
   if (
-    (baseUnit === UnitType.PIECE || baseUnit === UnitType.PACKET) &&
+    (baseUnit === "PIECE" || baseUnit === "PACKET") &&
     unitsPerCarton &&
     unitsPerCarton > 0
   ) {
-    return [baseUnit, UnitType.CARTON];
+    return [baseUnit, "CARTON"];
   }
   return [baseUnit];
 }
@@ -219,7 +219,7 @@ export function ProductionRunWorkspace({
 
       const variance = computeVariance(plannedBase, issuedBase, tolerance);
       const estCost = estimateFifoCost(item.openBatches, issuedBase);
-      if (item.category === ItemCategory.PACKAGING) {
+      if (item.category === "PACKAGING") {
         packCost = money(packCost.plus(estCost));
       } else {
         rawCost = money(rawCost.plus(estCost));
@@ -410,7 +410,7 @@ export function ProductionRunWorkspace({
                     item.baseUnit,
                     item.unitsPerCarton
                   );
-                  const isPackaging = item.category === ItemCategory.PACKAGING;
+                  const isPackaging = item.category === "PACKAGING";
 
                   return (
                     <div

@@ -1,4 +1,4 @@
-import { UnitType } from "@prisma/client";
+import type { UnitType } from "@prisma/client";
 import Decimal from "decimal.js";
 import { qty, toDec } from "./decimal";
 
@@ -47,8 +47,8 @@ export function convertUnit(
 
   // Packaging / Count conversion: CARTON <-> PACKET / PIECE
   if (
-    fromUnit === UnitType.CARTON &&
-    (toUnit === UnitType.PACKET || toUnit === UnitType.PIECE)
+    fromUnit === "CARTON" &&
+    (toUnit === "PACKET" || toUnit === "PIECE")
   ) {
     const perCarton = ctx?.unitsPerCarton;
     if (!perCarton || perCarton <= 0) {
@@ -58,8 +58,8 @@ export function convertUnit(
   }
 
   if (
-    (fromUnit === UnitType.PACKET || fromUnit === UnitType.PIECE) &&
-    toUnit === UnitType.CARTON
+    (fromUnit === "PACKET" || fromUnit === "PIECE") &&
+    toUnit === "CARTON"
   ) {
     const perCarton = ctx?.unitsPerCarton;
     if (!perCarton || perCarton <= 0) {
@@ -70,8 +70,8 @@ export function convertUnit(
 
   // PIECE <-> PACKET equivalence when 1:1 count
   if (
-    (fromUnit === UnitType.PIECE && toUnit === UnitType.PACKET) ||
-    (fromUnit === UnitType.PACKET && toUnit === UnitType.PIECE)
+    (fromUnit === "PIECE" && toUnit === "PACKET") ||
+    (fromUnit === "PACKET" && toUnit === "PIECE")
   ) {
     return qty(amount);
   }

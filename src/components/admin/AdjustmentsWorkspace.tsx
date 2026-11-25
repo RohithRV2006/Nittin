@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { UnitType } from "@prisma/client";
+import type { UnitType } from "@prisma/client";
 import { recordStockAdjustmentAction } from "@/actions/procurement.actions";
 import { InlineAlert } from "@/components/ui/InlineAlert";
 import { PageHeader } from "@/components/ui/PageHeader";

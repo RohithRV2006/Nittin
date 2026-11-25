@@ -2,7 +2,8 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { PaymentMode, PaymentStatus, UnitType } from "@prisma/client";
+import type { PaymentMode, PaymentStatus, UnitType } from "@prisma/client";
+import { PAYMENT_MODES } from "@/lib/enums";
 import {
   recordPurchaseAction,
   recordSupplierPaymentAction,
@@ -59,18 +60,18 @@ interface DraftLine {
 }
 
 function getCompatibleUnits(baseUnit: UnitType, unitsPerCarton: number | null): UnitType[] {
-  if (baseUnit === UnitType.KG || baseUnit === UnitType.GRAM) {
-    return [UnitType.KG, UnitType.GRAM];
+  if (baseUnit === "KG" || baseUnit === "GRAM") {
+    return ["KG", "GRAM"];
   }
-  if (baseUnit === UnitType.LITRE || baseUnit === UnitType.ML) {
-    return [UnitType.LITRE, UnitType.ML];
+  if (baseUnit === "LITRE" || baseUnit === "ML") {
+    return ["LITRE", "ML"];
   }
   if (
-    (baseUnit === UnitType.PIECE || baseUnit === UnitType.PACKET) &&
+    (baseUnit === "PIECE" || baseUnit === "PACKET") &&
     unitsPerCarton &&
     unitsPerCarton > 0
   ) {
-    return [baseUnit, UnitType.CARTON];
+    return [baseUnit, "CARTON"];
   }
   return [baseUnit];
 }
@@ -115,7 +116,7 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
     PurchasesPageData["purchases"][number] | null
   >(null);
   const [payAmount, setPayAmount] = useState("");
-  const [payMode, setPayMode] = useState<PaymentMode>(PaymentMode.BANK_TRANSFER);
+  const [payMode, setPayMode] = useState<PaymentMode>("BANK_TRANSFER");
   const [payDate, setPayDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [payRef, setPayRef] = useState("");
   const [payNotes, setPayNotes] = useState("");
@@ -254,7 +255,7 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
         mobileTitle={(r) => r.purchaseNumber}
         mobileSubtitle={(r) => <StatusBadge status={r.paymentStatus} />}
         mobileActions={(r) =>
-          r.paymentStatus !== PaymentStatus.PAID ? (
+          r.paymentStatus !== "PAID" ? (
             <button
               type="button"
               onClick={() => {
@@ -312,7 +313,7 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
             header: "Actions",
             align: "right",
             render: (r) =>
-              r.paymentStatus !== PaymentStatus.PAID ? (
+              r.paymentStatus !== "PAID" ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -630,7 +631,7 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
                   value={payMode}
                   onChange={(e) => setPayMode(e.target.value as PaymentMode)}
                 >
-                  {Object.values(PaymentMode).map((m) => (
+                  {PAYMENT_MODES.map((m) => (
                     <option key={m} value={m}>
                       {m.replace("_", " ")}
                     </option>

@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ItemCategory, UnitType } from "@prisma/client";
+import type { ItemCategory, UnitType } from "@prisma/client";
 import {
   cloneBomAction,
   toggleBomActiveAction,
@@ -55,18 +55,18 @@ export interface BomsPageData {
 }
 
 function getCompatibleUnits(baseUnit: UnitType, unitsPerCarton: number | null): UnitType[] {
-  if (baseUnit === UnitType.KG || baseUnit === UnitType.GRAM) {
-    return [UnitType.KG, UnitType.GRAM];
+  if (baseUnit === "KG" || baseUnit === "GRAM") {
+    return ["KG", "GRAM"];
   }
-  if (baseUnit === UnitType.LITRE || baseUnit === UnitType.ML) {
-    return [UnitType.LITRE, UnitType.ML];
+  if (baseUnit === "LITRE" || baseUnit === "ML") {
+    return ["LITRE", "ML"];
   }
   if (
-    (baseUnit === UnitType.PIECE || baseUnit === UnitType.PACKET) &&
+    (baseUnit === "PIECE" || baseUnit === "PACKET") &&
     unitsPerCarton &&
     unitsPerCarton > 0
   ) {
-    return [baseUnit, UnitType.CARTON];
+    return [baseUnit, "CARTON"];
   }
   return [baseUnit];
 }
@@ -458,7 +458,7 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
                     >
                       {data.ingredientItems.map((i) => (
                         <option key={i.id} value={i.id}>
-                          {i.name} ({i.category === ItemCategory.PACKAGING ? "Pack" : "Raw"})
+                          {i.name} ({i.category === "PACKAGING" ? "Pack" : "Raw"})
                         </option>
                       ))}
                     </select>

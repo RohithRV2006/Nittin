@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ProductionRunStatus } from "@prisma/client";
+import type { ProductionRunStatus } from "@prisma/client";
 import { cancelProductionRunAction } from "@/actions/production.actions";
 import { InlineAlert } from "@/components/ui/InlineAlert";
 import { PageHeader } from "@/components/ui/PageHeader";
