@@ -7,6 +7,7 @@ import { Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cancelFieldOrderAction } from "@/actions/salesman.actions";
 import { OfflineSyncBanner } from "@/components/salesman/OfflineSyncBanner";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ResponsiveTable } from "@/components/ui/ResponsiveTable";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -66,6 +67,12 @@ export function SalesmanOrdersWorkspace({
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [offlineOrders, setOfflineOrders] = useState<QueuedOfflineOrder[]>([]);
+  const [cancelTarget, setCancelTarget] = useState<{
+    id: string;
+    orderNumber: string;
+  } | null>(null);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
 
   const handleQueueChanged = useCallback((rows: QueuedOfflineOrder[]) => {
     setOfflineOrders(rows);
@@ -84,18 +91,22 @@ export function SalesmanOrdersWorkspace({
     });
   }, [data.orders, statusFilter, search]);
 
-  const handleCancelSubmitted = (orderId: string, orderNumber: string) => {
-    const reason = window.prompt(
-      `Cancel submitted order ${orderNumber}? Enter reason:`
-    );
-    if (!reason) return;
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / PAGE_SIZE));
+  const pagedOrders = filteredOrders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const handleCancelSubmitted = async (reason?: string) => {
+    if (!cancelTarget || !reason) return;
     startTransition(async () => {
-      const res = await cancelFieldOrderAction({ orderId, reason });
+      const res = await cancelFieldOrderAction({
+        orderId: cancelTarget.id,
+        reason,
+      });
       if (!res.ok) {
         toast.error(res.error ?? "Failed to cancel");
         return;
       }
-      toast.success(`Order ${orderNumber} cancelled.`);
+      toast.success(`Order ${cancelTarget.orderNumber} cancelled.`);
+      setCancelTarget(null);
       router.refresh();
     });
   };
@@ -240,7 +251,7 @@ export function SalesmanOrdersWorkspace({
             </div>
           ) : (
             <div className="space-y-2.5">
-              {filteredOrders.map((o) => {
+              {pagedOrders.map((o) => {
                 const expanded = expandedId === o.id;
                 return (
                   <div
@@ -309,7 +320,7 @@ export function SalesmanOrdersWorkspace({
                               type="button"
                               disabled={isPending}
                               onClick={() =>
-                                handleCancelSubmitted(o.id, o.orderNumber)
+                                setCancelTarget({ id: o.id, orderNumber: o.orderNumber })
                               }
                               className="text-xs font-medium text-red-700 dark:text-red-400 hover:underline"
                             >
@@ -322,6 +333,31 @@ export function SalesmanOrdersWorkspace({
                   </div>
                 );
               })}
+              {totalPages > 1 ? (
+                <div className="flex items-center justify-between pt-2 text-xs text-[var(--text-muted)]">
+                  <span>
+                    Page {page} of {totalPages}
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={page <= 1}
+                      onClick={() => setPage((p) => p - 1)}
+                      className="rounded-lg border border-[var(--border-default)] px-3 py-1.5 disabled:opacity-40"
+                    >
+                      Prev
+                    </button>
+                    <button
+                      type="button"
+                      disabled={page >= totalPages}
+                      onClick={() => setPage((p) => p + 1)}
+                      className="rounded-lg border border-[var(--border-default)] px-3 py-1.5 disabled:opacity-40"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           )}
         </div>
@@ -360,6 +396,21 @@ export function SalesmanOrdersWorkspace({
           ]}
         />
       )}
+
+      <ConfirmDialog
+        open={Boolean(cancelTarget)}
+        onClose={() => setCancelTarget(null)}
+        onConfirm={handleCancelSubmitted}
+        loading={isPending}
+        variant="danger"
+        requireReason
+        minReasonLength={3}
+        reasonLabel="Cancellation Reason"
+        reasonPlaceholder="Explain why this submitted order is cancelled..."
+        title={`Cancel Order ${cancelTarget?.orderNumber ?? ""}`}
+        description="Only unapproved submitted orders can be cancelled by the field salesman."
+        confirmLabel="Cancel Order"
+      />
     </div>
   );
 }

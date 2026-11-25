@@ -27,6 +27,8 @@ export interface NewOrderCatalogData {
     state: string;
     stateCode: string;
     gstin: string | null;
+    creditLimit?: string;
+    currentDue?: string;
     customPrices: Record<string, string>;
   }>;
   products: Array<{
@@ -293,17 +295,26 @@ export function NewOrderWorkspace({
             </select>
 
             {selectedCustomer ? (
-              <p className="mt-2 text-xs text-[var(--text-secondary)]">
-                GSTIN:{" "}
-                <span className="font-mono">
-                  {selectedCustomer.gstin ?? "Unregistered"}
-                </span>{" "}
-                • Place of Supply: {selectedCustomer.state} (
-                {selectedCustomer.stateCode === catalog.factoryStateCode
-                  ? "Intra-State CGST+SGST"
-                  : "Inter-State IGST"}
-                )
-              </p>
+              <div className="mt-2 space-y-1.5">
+                <p className="text-xs text-[var(--text-secondary)]">
+                  GSTIN:{" "}
+                  <span className="font-mono">
+                    {selectedCustomer.gstin ?? "Unregistered"}
+                  </span>{" "}
+                  • Place of Supply: {selectedCustomer.state} (
+                  {selectedCustomer.stateCode === catalog.factoryStateCode
+                    ? "Intra-State CGST+SGST"
+                    : "Inter-State IGST"}
+                  )
+                </p>
+                {Number(selectedCustomer.creditLimit ?? 0) > 0 &&
+                Number(selectedCustomer.currentDue ?? 0) + Number(summary.total.toString()) >
+                  Number(selectedCustomer.creditLimit ?? 0) ? (
+                  <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                    Credit Warning: Open due ({formatINR(selectedCustomer.currentDue ?? "0")}) + order exceeds limit ({formatINR(selectedCustomer.creditLimit ?? "0")}).
+                  </p>
+                ) : null}
+              </div>
             ) : null}
           </section>
 
@@ -326,7 +337,7 @@ export function NewOrderWorkspace({
                     { itemId: nextProd.id, quantity: "1", inputUnit: nextProd.unit },
                   ]);
                 }}
-                className="min-h-[36px] rounded-lg border border-[var(--border-strong)] px-3 text-xs font-semibold text-[var(--brand-primary)] hover:bg-[#ECFDF5]"
+                className="min-h-[36px] rounded-lg border border-[var(--border-strong)] px-3 text-xs font-semibold text-[var(--brand-primary)] hover:bg-[var(--brand-soft)]"
               >
                 + Add Product
               </button>

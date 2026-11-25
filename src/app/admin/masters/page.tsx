@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ResetRequestStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { MastersWorkspace, type MastersData } from "@/components/admin/MastersWorkspace";
 
@@ -34,6 +35,10 @@ export default async function AdminMastersPage() {
         phone: true,
         active: true,
         lockedUntil: true,
+        passwordResetRequests: {
+          where: { status: ResetRequestStatus.PENDING },
+          select: { id: true },
+        },
       },
     }),
   ]);
@@ -104,6 +109,7 @@ export default async function AdminMastersPage() {
       phone: u.phone,
       active: u.active,
       lockedUntil: u.lockedUntil?.toISOString() ?? null,
+      pendingResetRequest: u.passwordResetRequests.length > 0,
     })),
   };
 

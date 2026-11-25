@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import {
+  CreditNoteType,
   DispatchStatus,
   DocumentType,
   InvoiceStatus,
@@ -9,6 +10,7 @@ import {
   OrderStatus,
   PaymentStatus,
   RefType,
+  ReturnCondition,
   Role,
 } from "@prisma/client";
 import Decimal from "decimal.js";
@@ -23,6 +25,7 @@ import {
   recordInwardBatchAndLedger,
 } from "@/lib/engines/stock";
 import { computeGstSplit } from "@/lib/engines/tax";
+import { isIntegerUnit } from "@/lib/enums";
 import { prisma } from "@/lib/prisma";
 import { getFinancialYear } from "@/lib/security";
 import {
@@ -31,6 +34,7 @@ import {
   dispatchInvoiceSchema,
   holdOrderSchema,
   recordCustomerPaymentSchema,
+  recordSalesReturnSchema,
   rejectOrderSchema,
 } from "@/lib/validators/phase4";
 import type { ActionResult } from "./masters.actions";
@@ -336,17 +340,21 @@ export async function rejectOrderAction(input: unknown): Promise<ActionResult> {
 
 export async function recordDispatchAction(
   input: unknown
-): Promise<ActionResult> {
+): Promise<ActionResult<{ challanNumber: string; dispatchStatus: DispatchStatus }>> {
   try {
     const actor = await requireVerifiedUser([Role.FACTORY_ADMIN]);
     const parsed = dispatchInvoiceSchema.safeParse(input);
     if (!parsed.success) {
-      return { ok: false, error: "Invalid dispatch payload" };
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid dispatch payload",
+      };
     }
 
-    await prisma.$transaction(async (tx) => {
+    const v = parsed.data;
+    const res = await prisma.$transaction(async (tx) => {
       const invoice = await tx.invoice.findUnique({
-        where: { id: parsed.data.invoiceId },
+        where: { id: v.invoiceId },
         include: { items: { include: { item: true } } },
       });
 
@@ -355,44 +363,153 @@ export async function recordDispatchAction(
         throw new Error("Cancelled invoices cannot be dispatched.");
       }
       if (invoice.dispatchStatus === DispatchStatus.DISPATCHED) {
-        throw new Error("Invoice has already been dispatched.");
+        throw new Error("Invoice has already been completely dispatched.");
       }
 
-      for (const li of invoice.items) {
+      const itemById = new Map(invoice.items.map((li) => [li.id, li]));
+      const dispatchLines: Array<{
+        invoiceItemId: string;
+        itemId: string;
+        itemName: string;
+        unit: typeof invoice.items[number]["item"]["unit"];
+        dispatchQty: ReturnType<typeof qty>;
+      }> = [];
+
+      if (v.items && v.items.length > 0) {
+        for (const reqLine of v.items) {
+          const li = itemById.get(reqLine.invoiceItemId);
+          if (!li) throw new Error("Invalid invoice line selected for dispatch.");
+          const dQty = qty(reqLine.quantity);
+          if (isIntegerUnit(li.item.unit) && !dQty.isInteger()) {
+            throw new Error(
+              `${li.item.name} uses ${li.item.unit} and must be dispatched in whole numbers.`
+            );
+          }
+          const ordered = qty(li.quantity.toString());
+          const already = qty(li.dispatchedQty.toString());
+          const remaining = qty(ordered.minus(already));
+          if (dQty.gt(remaining)) {
+            throw new Error(
+              `Dispatch qty (${dQty.toString()}) for ${li.item.name} exceeds remaining qty (${remaining.toString()}).`
+            );
+          }
+          dispatchLines.push({
+            invoiceItemId: li.id,
+            itemId: li.itemId,
+            itemName: li.item.name,
+            unit: li.item.unit,
+            dispatchQty: dQty,
+          });
+        }
+      } else {
+        for (const li of invoice.items) {
+          const ordered = qty(li.quantity.toString());
+          const already = qty(li.dispatchedQty.toString());
+          const remaining = qty(ordered.minus(already));
+          if (remaining.gt(0)) {
+            dispatchLines.push({
+              invoiceItemId: li.id,
+              itemId: li.itemId,
+              itemName: li.item.name,
+              unit: li.item.unit,
+              dispatchQty: remaining,
+            });
+          }
+        }
+      }
+
+      if (dispatchLines.length === 0) {
+        throw new Error("No remaining quantities left to dispatch.");
+      }
+
+      const challanNumber = await getNextDocumentNumber(
+        tx,
+        DocumentType.DISPATCH_CHALLAN
+      );
+
+      const challan = await tx.dispatchChallan.create({
+        data: {
+          challanNumber,
+          invoiceId: invoice.id,
+          dispatchedById: actor.id,
+          vehicleNumber: v.vehicleNumber || null,
+          notes: v.notes || null,
+          items: {
+            create: dispatchLines.map((dl) => ({
+              invoiceItemId: dl.invoiceItemId,
+              itemId: dl.itemId,
+              quantity: dl.dispatchQty,
+            })),
+          },
+        },
+      });
+
+      const updatedByLine = new Map<string, ReturnType<typeof qty>>();
+      for (const dl of dispatchLines) {
         await consumeFifoBatches(tx, {
-          itemId: li.itemId,
-          unit: li.item.unit,
-          requiredQty: li.quantity.toString(),
+          itemId: dl.itemId,
+          unit: dl.unit,
+          requiredQty: dl.dispatchQty.toString(),
           movementType: MovementType.DISPATCH_SALE,
           referenceType: RefType.INVOICE,
           referenceId: invoice.id,
           createdById: actor.id,
-          notes: `Dispatch for ${invoice.invoiceNumber}`,
-          preferFefo: parsed.data.preferFefo,
+          notes: `Challan ${challanNumber} for ${invoice.invoiceNumber}`,
+          preferFefo: v.preferFefo,
+        });
+
+        const existingLi = itemById.get(dl.invoiceItemId)!;
+        const nextDispatched = qty(
+          qty(existingLi.dispatchedQty.toString()).plus(dl.dispatchQty)
+        );
+        updatedByLine.set(dl.invoiceItemId, nextDispatched);
+
+        await tx.invoiceItem.update({
+          where: { id: dl.invoiceItemId },
+          data: { dispatchedQty: nextDispatched },
         });
       }
+
+      const allComplete = invoice.items.every((li) => {
+        const nextDispatched =
+          updatedByLine.get(li.id) ?? qty(li.dispatchedQty.toString());
+        return nextDispatched.gte(qty(li.quantity.toString()));
+      });
+
+      const nextStatus = allComplete
+        ? DispatchStatus.DISPATCHED
+        : DispatchStatus.PARTIALLY_DISPATCHED;
 
       await tx.invoice.update({
         where: { id: invoice.id },
         data: {
-          dispatchStatus: DispatchStatus.DISPATCHED,
+          dispatchStatus: nextStatus,
           dispatchedAt: new Date(),
           dispatchedById: actor.id,
         },
       });
 
-      await tx.order.update({
-        where: { id: invoice.orderId },
-        data: { status: OrderStatus.DISPATCHED },
-      });
+      if (allComplete) {
+        await tx.order.update({
+          where: { id: invoice.orderId },
+          data: { status: OrderStatus.DISPATCHED },
+        });
+      }
 
       await writeAuditLog(tx, {
         entityType: "INVOICE",
         entityId: invoice.id,
         action: "DISPATCH",
         userId: actor.id,
-        changes: { invoiceNumber: invoice.invoiceNumber, dispatchStatus: "DISPATCHED" },
+        changes: {
+          invoiceNumber: invoice.invoiceNumber,
+          challanId: challan.id,
+          challanNumber,
+          dispatchStatus: nextStatus,
+        },
       });
+
+      return { challanNumber, dispatchStatus: nextStatus };
     });
 
     revalidatePath("/admin");
@@ -401,11 +518,269 @@ export async function recordDispatchAction(
     revalidatePath("/admin/adjustments");
     revalidatePath("/salesman");
     revalidatePath("/salesman/orders");
-    return { ok: true };
+    return { ok: true, data: res };
   } catch (err) {
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Failed to record dispatch",
+    };
+  }
+}
+
+export async function recordSalesReturnAction(input: unknown): Promise<
+  ActionResult<{
+    creditNoteNumber: string;
+    totalCredit: string;
+    restockedQty: string;
+  }>
+> {
+  try {
+    const actor = await requireVerifiedUser([Role.FACTORY_ADMIN]);
+    const parsed = recordSalesReturnSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid sales return",
+      };
+    }
+
+    const v = parsed.data;
+    const res = await prisma.$transaction(async (tx) => {
+      const [settings, invoice] = await Promise.all([
+        tx.companySettings.findUnique({ where: { id: "default" } }),
+        tx.invoice.findUnique({
+          where: { id: v.invoiceId },
+          include: {
+            items: {
+              include: {
+                item: true,
+                creditNoteItems: {
+                  include: {
+                    creditNote: { select: { type: true } },
+                  },
+                },
+              },
+            },
+            creditNotes: { select: { amount: true } },
+          },
+        }),
+      ]);
+
+      if (!settings?.stateCode) {
+        throw new Error("Configure Company Settings before recording sales returns.");
+      }
+      if (!invoice) throw new Error("Invoice not found.");
+      if (invoice.status !== InvoiceStatus.POSTED) {
+        throw new Error("Sales returns are only allowed on posted invoices.");
+      }
+      if (invoice.dispatchStatus === DispatchStatus.PENDING_DISPATCH) {
+        throw new Error("Invoice has not been dispatched yet; cancel invoice instead.");
+      }
+
+      const itemById = new Map(invoice.items.map((li) => [li.id, li]));
+
+      let totalTaxable = money(0);
+      let totalCgst = money(0);
+      let totalSgst = money(0);
+      let totalIgst = money(0);
+      let restockedTotalQty = qty(0);
+
+      const preparedLines: Array<{
+        invoiceItemId: string;
+        itemId: string;
+        itemCode: string;
+        itemName: string;
+        unit: typeof invoice.items[number]["item"]["unit"];
+        returnedQty: ReturnType<typeof qty>;
+        condition: ReturnCondition;
+        unitPrice: string;
+        taxRate: string;
+        taxableAmount: ReturnType<typeof money>;
+        cgstAmount: ReturnType<typeof money>;
+        sgstAmount: ReturnType<typeof money>;
+        igstAmount: ReturnType<typeof money>;
+        totalAmount: ReturnType<typeof money>;
+      }> = [];
+
+      for (const reqLine of v.items) {
+        const li = itemById.get(reqLine.invoiceItemId);
+        if (!li) throw new Error("Invalid invoice line selected for return.");
+        const rQty = qty(reqLine.quantity);
+        if (isIntegerUnit(li.item.unit) && !rQty.isInteger()) {
+          throw new Error(
+            `${li.item.name} uses ${li.item.unit} and must be returned in whole numbers.`
+          );
+        }
+
+        let alreadyReturned = qty(0);
+        for (const cni of li.creditNoteItems) {
+          alreadyReturned = qty(alreadyReturned.plus(cni.returnedQty.toString()));
+        }
+
+        const dispatched = qty(li.dispatchedQty.toString());
+        const maxReturnable = qty(dispatched.minus(alreadyReturned));
+        if (rQty.gt(maxReturnable)) {
+          throw new Error(
+            `Return qty (${rQty.toString()}) for ${li.item.name} exceeds returnable dispatched qty (${maxReturnable.toString()}).`
+          );
+        }
+
+        const lineTaxable = money(rQty.mul(li.unitPrice.toString()));
+        const split = computeGstSplit(
+          lineTaxable,
+          li.taxRate.toString(),
+          settings.stateCode,
+          invoice.placeOfSupplyCode
+        );
+
+        totalTaxable = money(totalTaxable.plus(split.taxableAmount));
+        totalCgst = money(totalCgst.plus(split.cgstAmount));
+        totalSgst = money(totalSgst.plus(split.sgstAmount));
+        totalIgst = money(totalIgst.plus(split.igstAmount));
+
+        if (reqLine.condition === ReturnCondition.RESALEABLE) {
+          restockedTotalQty = qty(restockedTotalQty.plus(rQty));
+        }
+
+        preparedLines.push({
+          invoiceItemId: li.id,
+          itemId: li.itemId,
+          itemCode: li.item.code,
+          itemName: li.item.name,
+          unit: li.item.unit,
+          returnedQty: rQty,
+          condition: reqLine.condition,
+          unitPrice: li.unitPrice.toFixed(2),
+          taxRate: li.taxRate.toFixed(2),
+          taxableAmount: split.taxableAmount,
+          cgstAmount: split.cgstAmount,
+          sgstAmount: split.sgstAmount,
+          igstAmount: split.igstAmount,
+          totalAmount: split.totalAmount,
+        });
+      }
+
+      const grandCredit = money(
+        totalTaxable.plus(totalCgst).plus(totalSgst).plus(totalIgst)
+      );
+      const creditNoteNumber = await getNextDocumentNumber(
+        tx,
+        DocumentType.CREDIT_NOTE
+      );
+
+      const cn = await tx.creditNote.create({
+        data: {
+          creditNoteNumber,
+          invoiceId: invoice.id,
+          type: CreditNoteType.SALES_RETURN,
+          taxableAmount: totalTaxable,
+          cgstAmount: totalCgst,
+          sgstAmount: totalSgst,
+          igstAmount: totalIgst,
+          amount: grandCredit,
+          restocked: restockedTotalQty.gt(0),
+          reason: v.reason,
+          issuedById: actor.id,
+          items: {
+            create: preparedLines.map((pl) => ({
+              invoiceItemId: pl.invoiceItemId,
+              itemId: pl.itemId,
+              returnedQty: pl.returnedQty,
+              condition: pl.condition,
+              unitPrice: pl.unitPrice,
+              taxRate: pl.taxRate,
+              taxableAmount: pl.taxableAmount,
+              cgstAmount: pl.cgstAmount,
+              sgstAmount: pl.sgstAmount,
+              igstAmount: pl.igstAmount,
+              totalAmount: pl.totalAmount,
+            })),
+          },
+        },
+      });
+
+      // Restock only RESALEABLE returns into physical FIFO batches so Ledger == Batches invariant holds
+      for (const pl of preparedLines) {
+        if (pl.condition === ReturnCondition.RESALEABLE) {
+          const latestBatch = await tx.stockBatch.findFirst({
+            where: { itemId: pl.itemId },
+            orderBy: { createdAt: "desc" },
+            select: { unitRate: true },
+          });
+          await recordInwardBatchAndLedger(tx, {
+            itemId: pl.itemId,
+            unit: pl.unit,
+            quantity: pl.returnedQty.toString(),
+            unitRate: latestBatch?.unitRate.toString() ?? pl.unitPrice,
+            movementType: MovementType.SALES_RETURN,
+            referenceType: RefType.CREDIT_NOTE,
+            referenceId: cn.id,
+            batchNumber: `RET-${creditNoteNumber.replace(/\//g, "-")}-${pl.itemCode}`,
+            createdById: actor.id,
+            notes: `Sales return restock (${creditNoteNumber} / ${invoice.invoiceNumber})`,
+          });
+        }
+      }
+
+      // Recompute Invoice PaymentStatus accounting for all Credit Notes
+      let priorCreditSum = money(0);
+      for (const existingCn of invoice.creditNotes) {
+        priorCreditSum = money(priorCreditSum.plus(existingCn.amount.toString()));
+      }
+      const nextCreditSum = money(priorCreditSum.plus(grandCredit));
+      const paid = money(invoice.paidAmount.toString());
+      const netCollectible = Decimal.max(
+        money(0),
+        money(invoice.totalAmount.toString()).minus(nextCreditSum)
+      );
+      const nextPayStatus = paid.gte(netCollectible)
+        ? PaymentStatus.PAID
+        : paid.gt(0)
+          ? PaymentStatus.PARTIAL
+          : PaymentStatus.UNPAID;
+
+      await tx.invoice.update({
+        where: { id: invoice.id },
+        data: { paymentStatus: nextPayStatus },
+      });
+
+      await writeAuditLog(tx, {
+        entityType: "CREDIT_NOTE",
+        entityId: cn.id,
+        action: "SALES_RETURN",
+        userId: actor.id,
+        changes: {
+          creditNoteNumber,
+          invoiceNumber: invoice.invoiceNumber,
+          totalCredit: grandCredit.toFixed(2),
+          restockedQty: restockedTotalQty.toString(),
+          lines: preparedLines.map((p) => ({
+            item: p.itemName,
+            qty: p.returnedQty.toString(),
+            condition: p.condition,
+          })),
+        },
+        reason: v.reason,
+      });
+
+      return {
+        creditNoteNumber,
+        totalCredit: grandCredit.toFixed(2),
+        restockedQty: restockedTotalQty.toString(),
+      };
+    });
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/invoices");
+    revalidatePath("/admin/payments");
+    revalidatePath("/admin/adjustments");
+    revalidatePath("/auditor");
+    revalidatePath("/dashboard");
+    return { ok: true, data: res };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to record sales return",
     };
   }
 }
@@ -435,26 +810,38 @@ export async function cancelInvoiceWithCreditNoteAction(
         tx,
         DocumentType.CREDIT_NOTE
       );
-      const wasDispatched = invoice.dispatchStatus === DispatchStatus.DISPATCHED;
+      const dispatchedLines = invoice.items.filter((li) =>
+        qty(li.dispatchedQty.toString()).gt(0)
+      );
+      const hadAnyDispatch =
+        invoice.dispatchStatus !== DispatchStatus.PENDING_DISPATCH ||
+        dispatchedLines.length > 0;
 
       const cn = await tx.creditNote.create({
         data: {
           creditNoteNumber,
           invoiceId: invoice.id,
+          type: CreditNoteType.CANCELLATION,
           taxableAmount: invoice.taxableAmount,
           cgstAmount: invoice.cgstAmount,
           sgstAmount: invoice.sgstAmount,
           igstAmount: invoice.igstAmount,
           amount: invoice.totalAmount,
-          restocked: wasDispatched,
+          restocked: hadAnyDispatch,
           reason,
           issuedById: actor.id,
         },
       });
 
-      // Only restock finished goods if physical dispatch actually happened
-      if (wasDispatched) {
+      // Only restock finished goods that were actually dispatched (supports partial dispatch!)
+      if (hadAnyDispatch) {
         for (const li of invoice.items) {
+          const restockQty =
+            dispatchedLines.length > 0
+              ? qty(li.dispatchedQty.toString())
+              : qty(li.quantity.toString());
+          if (restockQty.lte(0)) continue;
+
           const latestBatch = await tx.stockBatch.findFirst({
             where: { itemId: li.itemId },
             orderBy: { createdAt: "desc" },
@@ -463,7 +850,7 @@ export async function cancelInvoiceWithCreditNoteAction(
           await recordInwardBatchAndLedger(tx, {
             itemId: li.itemId,
             unit: li.item.unit,
-            quantity: li.quantity.toString(),
+            quantity: restockQty.toString(),
             unitRate: latestBatch?.unitRate.toString() ?? "0",
             movementType: MovementType.STOCK_ADJUSTMENT,
             referenceType: RefType.CREDIT_NOTE,
@@ -493,12 +880,12 @@ export async function cancelInvoiceWithCreditNoteAction(
         changes: {
           creditNoteNumber,
           invoiceNumber: invoice.invoiceNumber,
-          restocked: wasDispatched,
+          restocked: hadAnyDispatch,
         },
         reason,
       });
 
-      return { creditNoteNumber, restocked: wasDispatched };
+      return { creditNoteNumber, restocked: hadAnyDispatch };
     });
 
     revalidatePath("/admin");
@@ -641,16 +1028,26 @@ export async function recordCustomerPaymentAction(
       const payAmount = money(v.amount);
 
       if (v.invoiceId) {
-        const inv = await tx.invoice.findUnique({ where: { id: v.invoiceId } });
+        const inv = await tx.invoice.findUnique({
+          where: { id: v.invoiceId },
+          include: { creditNotes: { select: { amount: true } } },
+        });
         if (!inv || inv.customerId !== v.customerId) {
           throw new Error("Invoice not found for selected customer.");
         }
         if (inv.status !== InvoiceStatus.POSTED) {
           throw new Error("Cannot record payment against a cancelled invoice.");
         }
+        let creditTotal = money(0);
+        for (const cn of inv.creditNotes) {
+          creditTotal = money(creditTotal.plus(cn.amount.toString()));
+        }
         const paid = money(inv.paidAmount.toString());
-        const total = money(inv.totalAmount.toString());
-        const remaining = money(total.minus(paid));
+        const netTotal = Decimal.max(
+          money(0),
+          money(inv.totalAmount.toString()).minus(creditTotal)
+        );
+        const remaining = Decimal.max(money(0), money(netTotal.minus(paid)));
         if (payAmount.gt(remaining)) {
           throw new Error(
             `Payment ₹${payAmount.toFixed(2)} exceeds remaining invoice balance ₹${remaining.toFixed(2)}.`
@@ -658,7 +1055,7 @@ export async function recordCustomerPaymentAction(
         }
 
         const nextPaid = money(paid.plus(payAmount));
-        const nextStatus = nextPaid.gte(total)
+        const nextStatus = nextPaid.gte(netTotal)
           ? PaymentStatus.PAID
           : PaymentStatus.PARTIAL;
 
@@ -702,13 +1099,24 @@ export async function recordCustomerPaymentAction(
           status: InvoiceStatus.POSTED,
           paymentStatus: { in: [PaymentStatus.UNPAID, PaymentStatus.PARTIAL] },
         },
+        include: { creditNotes: { select: { amount: true } } },
         orderBy: { invoiceDate: "asc" },
       });
+
+      const getNetTotal = (inv: (typeof openInvoices)[number]) => {
+        let cnSum = money(0);
+        for (const cn of inv.creditNotes) {
+          cnSum = money(cnSum.plus(cn.amount.toString()));
+        }
+        return Decimal.max(money(0), money(inv.totalAmount.toString()).minus(cnSum));
+      };
 
       let totalOpen = money(0);
       for (const inv of openInvoices) {
         totalOpen = money(
-          totalOpen.plus(money(inv.totalAmount.toString()).minus(inv.paidAmount.toString()))
+          totalOpen.plus(
+            Decimal.max(money(0), money(getNetTotal(inv).minus(inv.paidAmount.toString())))
+          )
         );
       }
 
@@ -724,13 +1132,13 @@ export async function recordCustomerPaymentAction(
       for (const inv of openInvoices) {
         if (remainingToAllocate.lte(0)) break;
         const paid = money(inv.paidAmount.toString());
-        const total = money(inv.totalAmount.toString());
-        const invDue = money(total.minus(paid));
+        const netTotal = getNetTotal(inv);
+        const invDue = Decimal.max(money(0), money(netTotal.minus(paid)));
         if (invDue.lte(0)) continue;
 
         const alloc = Decimal.min(invDue, remainingToAllocate);
         const nextPaid = money(paid.plus(alloc));
-        const nextStatus = nextPaid.gte(total)
+        const nextStatus = nextPaid.gte(netTotal)
           ? PaymentStatus.PAID
           : PaymentStatus.PARTIAL;
 

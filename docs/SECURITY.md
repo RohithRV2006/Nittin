@@ -52,27 +52,28 @@ All database interactions flow through **Prisma ORM**, which compiles queries in
 * **Two-Layer Session Verification:**
   * **Edge Middleware (`jose` HS256 JWT):** Verifies the signed `HttpOnly`, `Secure` (in HTTPS/production), `SameSite=Lax` session cookie without opening TCP connections in Edge Runtime, redirecting unauthenticated or wrong-role requests before rendering.
   * **Server Action / RSC Guard:** Reads `User.active` and compares `session.tokenVersion === user.tokenVersion` from PostgreSQL on every privileged action/mutation so deactivated accounts or password resets invalidate existing sessions immediately.
-* **Serverless-Safe Account Lockout:** Failed login attempts increment `User.failedLoginAttempts` in PostgreSQL; after 5 consecutive failures, `User.lockedUntil` is set to `+15 minutes` (unaffected by serverless cold starts). Successful login resets the counter.
+* **Serverless-Safe Account Lockout & Rate Limiting:** Failed login attempts increment `User.failedLoginAttempts` in PostgreSQL; after 5 consecutive failures, `User.lockedUntil` is set to `+15 minutes`. Sliding-window rate limiting (`src/lib/rate-limit.ts`) also throttles repeated login, forgot-password, and demo-reset bursts.
+* **Self-Service & Admin Password Recovery:** Users submit non-enumerating Forgot Password requests (`PasswordResetRequest`) from `/login` and can rotate their own credentials (`changeOwnPasswordAction`, enforcing 8+ char alphanumeric policy). `FACTORY_ADMIN` resolves pending resets via `adminResetUserPasswordAction`, setting `mustChangePassword = true` and incrementing `tokenVersion` to revoke prior sessions immediately.
 
-### 4.4 RBAC Permission Matrix & IDOR Isolation
-Every Server Action and Route Handler calls `requireRole([...])` and enforces ownership scoping:
+### 4.4 RBAC Permission Matrix & Strict Portal Isolation
+Every Server Action, Layout, and Edge Middleware rule enforces strict **1-role-per-portal** boundaries and ownership scoping:
 
-| Role | Allowed Mutations | Read Scope & IDOR Rules |
+| Role | Portal Prefix & Allowed Mutations | Read Scope & IDOR Rules |
 | :--- | :--- | :--- |
-| **`SALESMAN`** | Create `Order` (only for active customers assigned to them or open territory). | **Strictly scoped:** Can read only `Order` records where `order.salesmanId === session.userId`. Cannot view other salesmen's orders, factory costs, supplier bills, or admin reports. |
-| **`FACTORY_ADMIN`** | Approve/edit/hold/reject orders, generate & dispatch invoices, issue credit notes, record purchases, supplier/customer payments, stock adjustments, manage masters & settings. | Full operational read access; all edits/overrides/adjustments write mandatory `AuditLog` entries. |
-| **`PRODUCTION_SUPERVISOR`** | Create/edit `BOM`, start/complete `ProductionRun` (logging consumption, yield, scrap, overheads). | Can read items, stock levels, BOMs, and production runs; cannot alter invoices, payments, or customer ledgers. |
-| **`AUDITOR`** | **None (Strictly Read-Only).** Blocked from all mutating Server Actions. | Read & export access to all 6 statutory reports, `AuditLog`, and Tally exports. |
-| **`OWNER`** | **None (Read-Only Executive View)** unless explicitly elevated. | Read access to executive KPIs, margins, variance alerts, stock levels, and receivables. |
+| **`SALESMAN`** | `/salesman/*` — Create/cancel own submitted `Order` (assigned/open customers). | **Strictly scoped:** Reads only `Order` records where `order.salesmanId === session.userId`. Cannot view factory costs, supplier bills, or admin/audit portals. |
+| **`FACTORY_ADMIN`** | `/admin/*` — Approve/edit/hold/reject orders, issue/dispatch (partial or full) invoices, sales returns & credit notes, verify floor GRNs into purchases, payments, stock adjustments, masters, and user password resets. | Scoped strictly to `/admin/*` operational screens; edits/resets/adjustments log immutable `AuditLog` entries. |
+| **`PRODUCTION_SUPERVISOR`** | `/production/*` — Create/edit `BOM`, start/complete `ProductionRun`, and log physical gate `GoodsReceipt` (GRN) deliveries. | Can read items, stock levels, BOMs, runs, and own/floor GRNs; cannot enter vendor rates/payments or access billing/admin/audit routes. |
+| **`AUDITOR`** | `/auditor/*` — **None (Strictly Read-Only).** Blocked from all mutating Server Actions. | Read & export access to all 6 statutory reports, `AuditLog`, and Tally exports. |
+| **`OWNER`** | `/dashboard` — **None (Standalone Read-Only Executive View).** | Read access to executive KPIs, margins, variance alerts, stock levels, and receivables on `/dashboard`. |
 
 ### 4.5 Non-Destructive Ledger, Master Deactivation & Export Sanitization
-* **No `DELETE` Operations:** `Invoice`, `StockLedger`, `ProductionRun`, `Purchase`, and `AuditLog` rows are never hard-deleted. Masters (`User`, `Customer`, `Supplier`, `Item`, `BOM`) use `active = false` soft deactivation so historical ledger references remain intact.
-* **Compensating Reversals:** Cancelled invoices generate a `CreditNote` and restock finished goods **only** if `dispatchStatus === 'DISPATCHED'`.
+* **No `DELETE` Operations:** `Invoice`, `DispatchChallan`, `StockLedger`, `ProductionRun`, `Purchase`, `GoodsReceipt`, `CreditNote`, and `AuditLog` rows are never hard-deleted. Masters (`User`, `Customer`, `Supplier`, `Item`, `BOM`) use `active = false` soft deactivation so historical ledger references remain intact.
+* **Compensating Reversals:** Cancelled invoices and partial sales returns generate sequential `CreditNote` documents—cancellations restock only quantities previously dispatched, and sales returns restock only `RESALEABLE` items (keeping `DAMAGED` scrap separate).
 * **CSV/Excel Formula Injection Guard (CWE-1236):** Export utilities neutralize any string cell beginning with `=`, `+`, `-`, `@`, `\t`, or `\r` by prefixing a single quote (`'`) before generating CSV/XLSX files.
 
 ### 4.6 Secret Management, HTTP Security Headers & Zero-Cost Security
 * Production credentials (`DATABASE_URL`, `SESSION_SECRET`) are stored in Vercel’s encrypted environment variables (`sslmode=require` to Neon PostgreSQL).
-* **Mandatory Security Headers:** Configured in `next.config` / Middleware: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`, and `Content-Security-Policy`.
+* **Mandatory Security Headers:** Configured in `next.config.ts`: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `X-DNS-Prefetch-Control: off`, `Referrer-Policy: strict-origin-when-cross-origin`, `Cross-Origin-Opener-Policy: same-origin`, `Strict-Transport-Security`, `Permissions-Policy`, and `Content-Security-Policy`.
 
 ### 4.7 Demo Mode Guard, Idempotency & Concurrency Locks
 * **Demo Switcher & Seed Reset Gating:** 1-click role-switcher buttons on `/login` are enabled only when `ENABLE_DEMO_MODE="true"`, and the benchmark seed-reset action requires both `ENABLE_DEMO_MODE="true"` and explicit confirmation/admin authorization so production data can never be wiped by unauthenticated visitors.

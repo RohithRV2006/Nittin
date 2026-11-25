@@ -8,7 +8,9 @@ import { isIntegerUnit, PAYMENT_MODES } from "@/lib/enums";
 import {
   recordPurchaseAction,
   recordSupplierPaymentAction,
+  rejectGoodsReceiptAction,
 } from "@/actions/procurement.actions";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { InlineAlert } from "@/components/ui/InlineAlert";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ResponsiveTable } from "@/components/ui/ResponsiveTable";
@@ -48,6 +50,25 @@ export interface PurchasesPageData {
     paidAmount: string;
     paymentStatus: PaymentStatus;
   }>;
+  pendingGrns: Array<{
+    id: string;
+    grnNumber: string;
+    supplierId: string;
+    supplierName: string;
+    challanNumber: string;
+    receivedDate: string;
+    receivedByName: string;
+    notes: string | null;
+    lines: Array<{
+      itemId: string;
+      itemName: string;
+      quantity: string;
+      inputUnit: UnitType;
+      taxRate: string;
+      batchNumber: string;
+      expiryDate: string;
+    }>;
+  }>;
 }
 
 interface DraftLine {
@@ -86,6 +107,10 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
   const [isPending, startTransition] = useTransition();
 
   const [purchaseOpen, setPurchaseOpen] = useState(false);
+  const [linkedGrnId, setLinkedGrnId] = useState<string>("");
+  const [rejectGrnTarget, setRejectGrnTarget] = useState<
+    PurchasesPageData["pendingGrns"][number] | null
+  >(null);
   const [supplierId, setSupplierId] = useState(data.suppliers[0]?.id ?? "");
   const [billNumber, setBillNumber] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(
@@ -160,6 +185,42 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
     };
   }, [lines, supplierId, data.suppliers, data.factoryStateCode]);
 
+  const openVerifyGrn = (grn: PurchasesPageData["pendingGrns"][number]) => {
+    setLinkedGrnId(grn.id);
+    setSupplierId(grn.supplierId);
+    setBillNumber(grn.challanNumber);
+    setPurchaseDate(grn.receivedDate);
+    setLines(
+      grn.lines.map((l) => ({
+        itemId: l.itemId,
+        quantity: isIntegerUnit(l.inputUnit) ? String(Number(l.quantity)) : l.quantity,
+        inputUnit: l.inputUnit,
+        unitRatePerInputUnit: "",
+        taxRate: l.taxRate,
+        batchNumber: l.batchNumber,
+        expiryDate: l.expiryDate,
+      }))
+    );
+    setPurchaseOpen(true);
+  };
+
+  const handleRejectGrn = async (reason?: string) => {
+    if (!rejectGrnTarget || !reason) return;
+    startTransition(async () => {
+      const res = await rejectGoodsReceiptAction({
+        grnId: rejectGrnTarget.id,
+        reason,
+      });
+      if (!res.ok) {
+        toast.error(res.error ?? "Failed to reject GRN");
+        return;
+      }
+      toast.success(`GRN ${rejectGrnTarget.grnNumber} rejected.`);
+      setRejectGrnTarget(null);
+      router.refresh();
+    });
+  };
+
   const handleCreatePurchase = (e: React.FormEvent) => {
     e.preventDefault();
     startTransition(async () => {
@@ -167,6 +228,7 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
         supplierId,
         billNumber,
         purchaseDate,
+        grnId: linkedGrnId || undefined,
         lines,
       });
       if (!res.ok) {
@@ -174,6 +236,7 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
         return;
       }
       setPurchaseOpen(false);
+      setLinkedGrnId("");
       setBillNumber("");
       toast.success(
         `Purchase ${res.data?.purchaseNumber ?? ""} recorded into FIFO Stock Ledger.`
@@ -216,7 +279,10 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
           <button
             type="button"
             disabled={!data.factoryConfigured || data.suppliers.length === 0 || data.items.length === 0}
-            onClick={() => setPurchaseOpen(true)}
+            onClick={() => {
+              setLinkedGrnId("");
+              setPurchaseOpen(true);
+            }}
             className="h-10 rounded-lg bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white hover:bg-[var(--brand-hover)] disabled:opacity-50"
           >
             + Record Inward Purchase
@@ -236,6 +302,56 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
         <StatCard label="Total Paid" value={totals.paid} tone="success" />
         <StatCard label="Payable Balance" value={totals.payable} tone="warning" />
       </div>
+
+      {data.pendingGrns.length > 0 ? (
+        <div className="space-y-3 rounded-xl border border-amber-300 bg-amber-50/70 p-4 dark:border-amber-800 dark:bg-amber-950/30">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+              Pending Floor Goods Receipts ({data.pendingGrns.length})
+            </h2>
+            <span className="text-xs text-[var(--text-muted)]">
+              Logged by Floor Supervisor — verify rates & GST to inward stock
+            </span>
+          </div>
+          <div className="space-y-2">
+            {data.pendingGrns.map((g) => (
+              <div
+                key={g.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3.5 py-2.5 text-xs"
+              >
+                <div>
+                  <span className="font-mono font-semibold text-[var(--text-primary)]">
+                    {g.grnNumber}
+                  </span>{" "}
+                  — {g.supplierName} (Challan: {g.challanNumber} • {g.receivedDate} • By{" "}
+                  {g.receivedByName})
+                  <p className="mt-0.5 text-[var(--text-muted)]">
+                    {g.lines.map((l) => `${l.itemName} (${l.quantity} ${l.inputUnit})`).join(", ")}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={!data.factoryConfigured || isPending}
+                    onClick={() => openVerifyGrn(g)}
+                    className="rounded-lg bg-[var(--brand-primary)] px-3 py-1.5 font-semibold text-white hover:bg-[var(--brand-hover)] disabled:opacity-50"
+                  >
+                    Verify & Bill GRN
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => setRejectGrnTarget(g)}
+                    className="rounded-lg border border-red-300 px-2.5 py-1.5 font-medium text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-400"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <ResponsiveTable
         data={data.purchases}
@@ -667,6 +783,21 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
           </form>
         ) : null}
       </SlideOverDrawer>
+
+      <ConfirmDialog
+        open={Boolean(rejectGrnTarget)}
+        onClose={() => setRejectGrnTarget(null)}
+        onConfirm={handleRejectGrn}
+        loading={isPending}
+        variant="danger"
+        requireReason
+        minReasonLength={5}
+        reasonLabel="Rejection Reason"
+        reasonPlaceholder="e.g. Duplicate challan or damaged shipment returned at gate..."
+        title={`Reject GRN ${rejectGrnTarget?.grnNumber ?? ""}`}
+        description="Rejected GRNs will not be added to FIFO stock batches."
+        confirmLabel="Reject GRN"
+      />
     </div>
   );
 }

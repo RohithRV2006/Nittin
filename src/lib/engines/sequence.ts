@@ -4,9 +4,11 @@ import { getFinancialYear } from "@/lib/security";
 const PREFIX_MAP: Record<DocumentType, string> = {
   ORDER: "ORD",
   INVOICE: "INV",
+  DISPATCH_CHALLAN: "CH",
   CREDIT_NOTE: "CN",
   PRODUCTION_RUN: "PR",
   PURCHASE: "PUR",
+  GRN: "GRN",
 };
 
 /**

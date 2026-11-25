@@ -21,11 +21,15 @@ export async function runDemoBenchmarkSeed(prisma: PrismaClient) {
 
   await prisma.$transaction(async (tx) => {
     await tx.auditLog.deleteMany();
+    await tx.passwordResetRequest.deleteMany();
     await tx.stockLedger.deleteMany();
     await tx.stockBatch.deleteMany();
     await tx.payment.deleteMany();
     await tx.supplierPayment.deleteMany();
+    await tx.creditNoteItem.deleteMany();
     await tx.creditNote.deleteMany();
+    await tx.dispatchChallanItem.deleteMany();
+    await tx.dispatchChallan.deleteMany();
     await tx.invoiceItem.deleteMany();
     await tx.invoice.deleteMany();
     await tx.orderItem.deleteMany();
@@ -34,6 +38,8 @@ export async function runDemoBenchmarkSeed(prisma: PrismaClient) {
     await tx.productionRun.deleteMany();
     await tx.bOMItem.deleteMany();
     await tx.bOM.deleteMany();
+    await tx.goodsReceiptItem.deleteMany();
+    await tx.goodsReceipt.deleteMany();
     await tx.purchaseItem.deleteMany();
     await tx.purchase.deleteMany();
     await tx.customerPrice.deleteMany();

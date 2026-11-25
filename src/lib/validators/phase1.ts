@@ -98,15 +98,29 @@ export const supplierSchema = z.object({
   address: z.string().trim().max(300).optional().or(z.literal("")),
 });
 
+export const passwordPolicySchema = z
+  .string()
+  .min(8, "Password must be at least 8 characters")
+  .max(100)
+  .regex(/[A-Za-z]/, "Password must include at least one letter")
+  .regex(/[0-9]/, "Password must include at least one number");
+
 export const createUserSchema = z.object({
   name: z.string().trim().min(2, "Full name is required").max(100),
   email: z.string().trim().email("Valid email is required").toLowerCase(),
-  password: z
-    .string()
-    .min(8, "Password must be at least 8 characters")
-    .max(100),
+  password: passwordPolicySchema,
   role: z.nativeEnum(Role),
   phone: z.string().trim().max(20).optional().or(z.literal("")),
+});
+
+export const adminResetPasswordSchema = z.object({
+  userId: z.string().uuid(),
+  temporaryPassword: passwordPolicySchema,
+});
+
+export const changeOwnPasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: passwordPolicySchema,
 });
 
 export const purchaseLineSchema = z.object({
@@ -123,7 +137,30 @@ export const createPurchaseSchema = z.object({
   supplierId: z.string().uuid("Select a supplier"),
   billNumber: z.string().trim().min(1, "Supplier bill number is required").max(60),
   purchaseDate: z.string().min(1, "Purchase date is required"),
+  grnId: z.string().uuid().optional().or(z.literal("")),
   lines: z.array(purchaseLineSchema).min(1, "Add at least one purchase item"),
+});
+
+export const grnLineSchema = z.object({
+  itemId: z.string().uuid(),
+  quantity: z.coerce.number().positive("Quantity must be > 0"),
+  inputUnit: z.nativeEnum(UnitType),
+  batchNumber: z.string().trim().max(60).optional().or(z.literal("")),
+  expiryDate: z.string().optional().or(z.literal("")),
+  notes: z.string().trim().max(150).optional().or(z.literal("")),
+});
+
+export const createGoodsReceiptSchema = z.object({
+  supplierId: z.string().uuid("Select a supplier"),
+  challanNumber: z.string().trim().min(1, "Delivery challan # is required").max(60),
+  receivedDate: z.string().min(1, "Received date is required"),
+  notes: z.string().trim().max(250).optional().or(z.literal("")),
+  lines: z.array(grnLineSchema).min(1, "Add at least one received item"),
+});
+
+export const rejectGrnSchema = z.object({
+  grnId: z.string().uuid(),
+  reason: z.string().trim().min(5, "Audit reason must be at least 5 characters").max(250),
 });
 
 export const supplierPaymentSchema = z.object({

@@ -24,6 +24,7 @@ export default async function AdminPaymentsPage() {
         invoices: {
           where: { status: InvoiceStatus.POSTED },
           orderBy: { invoiceDate: "asc" },
+          include: { creditNotes: { select: { amount: true } } },
         },
       },
     }),
@@ -46,28 +47,35 @@ export default async function AdminPaymentsPage() {
       const openInvoices: PaymentsPageData["customers"][number]["openInvoices"] = [];
 
       for (const inv of c.invoices) {
-        const invTot = money(inv.totalAmount.toString());
+        let creditSum = money(0);
+        for (const cn of inv.creditNotes) {
+          creditSum = money(creditSum.plus(cn.amount.toString()));
+        }
+        const netTot = money(inv.totalAmount.toString()).minus(creditSum);
+        const invTot = netTot.gt(0) ? money(netTot) : money(0);
         const invPaid = money(inv.paidAmount.toString());
         totalInvoiced = money(totalInvoiced.plus(invTot));
         totalPaid = money(totalPaid.plus(invPaid));
 
-        if (inv.paymentStatus !== PaymentStatus.PAID) {
+        const bal = money(invTot.minus(invPaid));
+        if (inv.paymentStatus !== PaymentStatus.PAID && bal.gt(0)) {
           openInvoices.push({
             id: inv.id,
             invoiceNumber: inv.invoiceNumber,
             invoiceDate: inv.invoiceDate.toISOString().slice(0, 10),
-            balanceDue: money(invTot.minus(invPaid)).toFixed(2),
+            balanceDue: bal.toFixed(2),
           });
         }
       }
 
+      const rawOut = money(totalInvoiced.minus(totalPaid));
       return {
         id: c.id,
         name: c.name,
         state: c.state,
         totalInvoiced: totalInvoiced.toFixed(2),
         totalPaid: totalPaid.toFixed(2),
-        outstanding: money(totalInvoiced.minus(totalPaid)).toFixed(2),
+        outstanding: (rawOut.gt(0) ? rawOut : money(0)).toFixed(2),
         openInvoices,
       };
     }),

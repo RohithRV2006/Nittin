@@ -4,35 +4,36 @@
 
 **Nittin** is an operational ERP used across outdoor retail markets (smartphones), bright billing desks (desktops), dusty factory floors (tablets), and accounting offices. The interface follows a **"Calm Utility"** aesthetic:
 
-1. **Minimal & Uncluttered:** Crisp white surfaces, subtle `1px` hairlines (`#E2E8F0`), generous whitespace, and zero decorative gradients or visual noise.
-2. **Consistent Across Every Role:** All 5 portals (`Salesman`, `Factory Admin`, `Production Supervisor`, `Auditor`, `Owner`) share one unified design system—identical typography, spacing, status pills, buttons, tables, and modals—while adapting navigation density to the user's device.
-3. **High-Contrast Legibility & Tabular Precision:** High-contrast Slate ink (`#0F172A`) on light surfaces (`#F8FAFC` / `#FFFFFF`) works reliably under outdoor glare and factory lighting. All currency (`₹`), weights (`kg`/`L`), and document numbers use **`tabular-nums`** so figures align cleanly down to the paisa.
-4. **Color Means Status Only:** A single restrained brand accent (**Deep Forest Emerald `#047857`**) anchors primary actions; semantic reds, ambers, and blues appear **only** when conveying real operational status (stock deficits, `> ±3%` production variance, overdue receivables, or order states).
+1. **Minimal & Uncluttered:** Warm ivory surfaces (`#FAF6EE` / `#FFFDF9`), subtle `1px` warm borders (`#E7DEC9`), generous whitespace, and full Light/Dark theme switching via `next-themes`.
+2. **Consistent Across Every Role:** All 5 portals (`Salesman`, `Factory Admin`, `Production Supervisor`, `Auditor`, `Owner`) share one unified design system—identical typography, spacing, status pills, `nittin.png` emblem, toasts (`sonner`), confirmation dialogs, tables, and drawers—while adapting navigation density to the user's device.
+3. **High-Contrast Legibility & Tabular Precision:** Deep espresso ink (`#23170F`) on warm cream (`#FAF6EE` / `#FFFDF9`) in Light Mode—and crisp cream ink on roasted umber (`#1C140F`) in Dark Mode—ensures outdoor and factory glare legibility. All currency (`Rs.`/`₹`), weights (`kg`/`L`), and document numbers use **`tabular-nums`** so figures align cleanly down to the paisa.
+4. **Color Means Status Only:** A single warm brand palette matching the company emblem (**Roasted Brown `#78350F`** primary and **Golden Amber `#D97706`** accent) anchors primary actions; semantic reds, ambers, and blues appear **only** when conveying real operational status (stock deficits, `> ±3%` production variance, overdue/credit-limit warnings, or order states).
 5. **Responsive Mobile + Desktop Everywhere:** Mobile-first thumb flows for field salesmen, tablet-friendly touch inputs for floor supervisors, and responsive table-to-card adaptation so even Admin, Auditor, and Owner screens work cleanly on phones without broken horizontal layouts.
 
 ---
 
 ## 2. Design Tokens (Color, Typography & Spacing)
 
-### 2.1 Color Palette
+### 2.1 Color Palette (Light Mode / Dark Mode Tokens)
 
-| Token              | Hex                   | Usage                                                    |
-| :----------------- | :-------------------- | :------------------------------------------------------- |
-| `--bg-canvas`      | `#F8FAFC`             | Application page background (Slate 50)                   |
-| `--bg-surface`     | `#FFFFFF`             | Cards, tables, modals, top bar, sidebar                  |
-| `--bg-subtle`      | `#F1F5F9`             | Table headers, hover rows, secondary chips               |
-| `--border-default` | `#E2E8F0`             | `1px` structural borders & dividers                      |
-| `--border-strong`  | `#CBD5E1`             | Input borders & active card outlines                     |
-| `--text-primary`   | `#0F172A`             | Headings, primary values, body copy                      |
-| `--text-secondary` | `#475569`             | Subtitles, table labels, secondary text                  |
-| `--text-muted`     | `#64748B`             | Captions, placeholders, timestamps                       |
-| `--brand-primary`  | `#047857`             | Primary CTAs, active nav indicator, key links            |
-| `--brand-hover`    | `#065F46`             | Primary CTA hover state                                  |
-| `--brand-soft`     | `#ECFDF5`             | Active sidebar item tint & focus highlights              |
-| `--status-success` | `#15803D` / `#F0FDF4` | `DISPATCHED`, `PAID`, `COMPLETED`, Stock Sufficient      |
-| `--status-warning` | `#B45309` / `#FFFBEB` | `ON_HOLD`, `PARTIAL`, `IN_PROGRESS`, Expiring Soon       |
-| `--status-danger`  | `#B91C1C` / `#FEF2F2` | Variance `> ±3%`, Stock Deficit, `CANCELLED`, `REJECTED` |
-| `--status-info`    | `#0369A1` / `#F0F9FF` | `SUBMITTED`, `APPROVED`, `INVOICED`, `POSTED`            |
+| Token              | Light / Dark Hex          | Usage                                                    |
+| :----------------- | :------------------------ | :------------------------------------------------------- |
+| `--bg-canvas`      | `#FAF6EE` / `#140F0C`     | Application page background (Warm Ivory / Espresso)      |
+| `--bg-surface`     | `#FFFDF9` / `#1C140F`     | Cards, tables, modals, top bar, sidebar                  |
+| `--bg-subtle`      | `#F3ECE0` / `#2A1F18`     | Table headers, hover rows, secondary chips               |
+| `--border-default` | `#E7DEC9` / `#3B2C22`     | `1px` structural borders & dividers                      |
+| `--border-strong`  | `#D4C3A3` / `#523E30`     | Input borders & active card outlines                     |
+| `--text-primary`   | `#23170F` / `#FAF4EA`     | Headings, primary values, body copy                      |
+| `--text-secondary` | `#5C4738` / `#D9CBB8`     | Subtitles, table labels, secondary text                  |
+| `--text-muted`     | `#856C59` / `#A89482`     | Captions, placeholders, timestamps                       |
+| `--brand-primary`  | `#78350F` / `#D97706`     | Primary CTAs, active nav indicator, key links            |
+| `--brand-hover`    | `#5C270A` / `#B45309`     | Primary CTA hover state                                  |
+| `--brand-soft`     | `#FEF3C7` / `#3B230E`     | Active sidebar item tint & focus highlights              |
+| `--accent-gold`    | `#D97706` / `#F59E0B`     | Secondary warm golden highlights                         |
+| `--status-success` | `#15803D` / `#F0FDF4`     | `DISPATCHED`, `PAID`, `COMPLETED`, Stock Sufficient      |
+| `--status-warning` | `#B45309` / `#FFFBEB`     | `ON_HOLD`, `PARTIAL`, `IN_PROGRESS`, Expiring Soon       |
+| `--status-danger`  | `#B91C1C` / `#FEF2F2`     | Variance `> ±3%`, Stock Deficit, `CANCELLED`, `REJECTED` |
+| `--status-info`    | `#78350F` / `#FEF3C7`     | `SUBMITTED`, `APPROVED`, `INVOICED`, `POSTED`            |
 
 ### 2.2 Typography
 
@@ -85,9 +86,9 @@
 | :------------------------ | :--------------------------------------------------------------------------------------------------- | :---------------------------------------- |
 | **Salesman**              | Home, New Order, Orders & Sales                                                                      | Home, `+ New Order`, Orders               |
 | **Factory Admin**         | Command Center, Orders, Invoices & Dispatch, Purchases, Payments, Stock Adjustments, Masters         | Overview, Orders, Invoices, More (Drawer) |
-| **Production Supervisor** | Floor Overview, New Production Run, BOM Recipes                                                      | Overview, `+ New Run`, BOMs               |
+| **Production Supervisor** | Floor Overview, New Batch Run, Goods Receipt (GRN), BOM Recipes                                      | Overview, `+ New Run`, GRN                |
 | **Auditor**               | Overview, Sales Register, GST Summary, Purchase Register, Stock Ledger, Production Report, Receivables, Audit Trail | Overview, Registers (Drawer), Stock, Dues |
-| **Owner**                 | Executive Dashboard (plus drill-down tabs: Stock, Variance, Margins, Receivables)                    | Single clean mobile/desktop view          |
+| **Owner**                 | Executive Dashboard (standalone KPIs, stock health, variance alerts, margins, receivables)           | Single clean mobile/desktop view          |
 
 ---
 
@@ -95,16 +96,15 @@
 
 Every screen is built from the same core UI primitives:
 
-1. **`AppShell`**: Handles sidebar, mobile drawer, mobile bottom bar, top bar, network status pill (`Online` / `Offline • N queued`), and user profile/sign-out menu.
-2. **`PageHeader`**: Consistent page title, concise subtitle, optional financial year/date indicator, and right-aligned action group (primary Emerald button + secondary outline buttons).
+1. **`AppShell`**: Handles sidebar (with `nittin.png` emblem), mobile drawer, mobile bottom bar, top bar (`Online`/`Offline` badge + `ThemeToggle` Light/Dark switch), Change Password drawer, and forced temporary-password alert.
+2. **`PageHeader`**: Consistent page title, concise subtitle, optional financial year/date indicator, and right-aligned action group (Roasted Brown primary button + secondary outline buttons).
 3. **`StatCard`**: Label (`12px`), primary metric (`24px tabular-nums font-semibold`), and compact sub-note/trend pill. Strictly max 3 data points per card.
-4. **`StatusBadge`**: Standardized semantic pill (`● Submitted`, `● On Hold`, `● Invoiced`, `● Dispatched`, `● Paid`, `● Variance Flagged`).
-5. **`ResponsiveTable`**:
-
-   * On `md+`: Clean white container, `#F8FAFC` sticky header, `44px–48px` row height, subtle row hover, right-aligned numeric columns, sticky/summary totals footer.
+4. **`StatusBadge`**: Standardized semantic pill (`Submitted`, `On Hold`, `Invoiced`, `Partial Dispatch`, `Dispatched`, `Paid`, `Pending Billing`, `Verified`, `Sales Return`, `Variance Flagged`).
+5. **`ResponsiveTable`:**
+   * On `md+`: Surface card container, `--bg-subtle` sticky header, `44px–48px` row height, subtle row hover, right-aligned numeric columns, sticky/summary totals footer.
    * On `< md`: Renders each row as a crisp card with top row (`Doc #` + `StatusBadge`), middle key-value pairs (`Customer`, `Date`, `Amount`), and bottom full-width/flex action bar.
-6. **`SlideOverDrawer` / `Modal`**: Clean `480px–640px` slide-over (desktop) / full-height sheet (mobile) for Order Verification, Inward Purchase, Payment Recording, Credit Note, Stock Adjustment, and BOM Editing—keeping the underlying table visible.
-7. **`InlineAlert`**: Clean bordered callout (`1px` colored border + soft tint + icon) for `Shortage of 32 packets`, `Yield -6.00% (> ±3% tolerance)`, `Oil +5.00%`, and `Offline queued`.
+6. **`SlideOverDrawer`, `ConfirmDialog` & `PasswordInput`**: Clean `480px–640px` slide-overs, accessible React confirmation/reason dialogs (`ConfirmDialog` replacing browser-native `confirm()`/`prompt()`), and Eye/EyeOff password visibility inputs.
+7. **`InlineAlert` & `sonner` Toasts**: Persistent bordered callouts (`InlineAlert`) strictly for operational alerts (`Shortage of 32 packets`, `Yield -6.00%`, `Credit Limit Exceeded`), paired with non-blocking `sonner` toast pop-ups for all save/error/sync feedback.
 
 ---
 
@@ -112,9 +112,9 @@ Every screen is built from the same core UI primitives:
 
 ### 5.1 Login & Demo Entry (`/login`)
 
-* **Layout:** Centered `400px` crisp card on `#F8FAFC` canvas with subtle Nittin brand mark + *"Order-to-Audit Manufacturing ERP"* subtitle.
-* **Form:** Clean Email + Password inputs, inline Zod validation errors, lock warning banner if brute-force locked.
-* **Demo Panel (when `ENABLE_DEMO_MODE=true`):** Separated cleanly below a `Demo Access` divider as compact, subtle role chips (not loud neon buttons) plus a confirmation-guarded *"Reset Benchmark Data"* link.
+* **Layout:** Centered `420px` card on `--bg-canvas` with `nittin.png` emblem, *"Order-to-Audit Manufacturing"* subtitle, and Light/Dark `ThemeToggle`.
+* **Form:** Clean Email + `PasswordInput` (Eye/EyeOff visibility toggle), *"Forgot password?"* inline reset request view, and `sonner` toast validation alerts.
+* **Demo Panel (when `ENABLE_DEMO_MODE=true`):** Separated cleanly below a `Demo Access` divider as compact role chips plus a `<ConfirmDialog>`-guarded *"Load / Reset Benchmark Data"* button.
 
 ### 5.2 Salesman Mobile Portal (`/salesman`, `/salesman/new-order`, `/salesman/orders`)
 
@@ -160,6 +160,6 @@ Every screen is built from the same core UI primitives:
 
 ## 6. Accessibility & Interaction Polish
 
-* **Keyboard & Focus:** Clear `2px` Emerald focus rings (`focus-visible:ring-2 focus-visible:ring-emerald-700`), Escape closes modals/drawers, Enter submits active forms.
-* **Touch & Field Usability:** Minimum `44×44px` tap targets on mobile/tablet controls; numeric keypads (`inputMode="decimal"`) on quantity, rate, and payment fields.
-* **Feedback:** Non-blocking toast notifications on saves/syncs, disabled loading states on submit buttons to prevent double clicks, and clear inline validation messages under invalid inputs.
+* **Keyboard & Focus:** Clear `2px` warm brand focus rings (`focus:border-[var(--brand-primary)]`), Escape closes modals/drawers, Enter submits active forms.
+* **Touch & Field Usability:** Minimum `44×44px` tap targets on mobile/tablet controls; numeric keypads (`inputMode="numeric"` for `PIECE`/`PACKET`/`CARTON`, `inputMode="decimal"` for weights/volumes/money).
+* **Feedback:** Consistent non-blocking `sonner` toast notifications across all actions, custom React `ConfirmDialog` modals for destructive/dispatch confirmations, and persistent `InlineAlert` banners strictly for live shortages, variance warnings, or credit limits.

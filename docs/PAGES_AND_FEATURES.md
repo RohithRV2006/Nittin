@@ -23,6 +23,7 @@ This document specifies the complete page architecture, routing structure, UI la
 | `/admin/adjustments` | Stock Adjustments & Expiry Alerts | Factory Admin | Adjustment Modal & Audit Log |
 | `/production` | Production Floor Overview | Floor Supervisor | Ruggedized Tablet / Desktop |
 | `/production/new-run` | Daily Batch Run & Scrap Logger | Floor Supervisor | Touch Recipe Form with Live Math |
+| `/production/receiving` | Floor Goods Receipt (GRN) | Floor Supervisor | Gate Receipt Intake (No Pricing) |
 | `/production/boms` | BOM Recipe Directory & Builder | Floor Supervisor | List & Recipe Builder Modal |
 | `/auditor` | Auditor Workspace & Report Center | Auditor | Filterable Table with Date Controls |
 | `/auditor/sales-register` | Sales Register (Customer & Product-Wise) | Auditor | Data Table with Excel/CSV & PDF Export |
@@ -41,8 +42,9 @@ This document specifies the complete page architecture, routing structure, UI la
 ### 3.1 Authentication & Demo Switcher (`/login`)
 * **Layout:** Clean, centered authentication card with responsive mobile and desktop layout.
 * **Features & Controls:**
-  * **Email & Password Input Fields:** Form with client and server Zod validation.
-  * **"Sign In" Button:** Submits credentials, validates session cookie (`HttpOnly`).
+  * **Email & `PasswordInput` Fields:** Includes Eye/EyeOff password visibility toggle and server Zod validation.
+  * **"Forgot password?" Action:** Submits a non-enumerating `PasswordResetRequest` to Factory Admin.
+  * **"Sign In" Button:** Submits credentials, validates session cookie (`HttpOnly`), and checks brute-force/rate limits.
   * **Demo 1-Click Role Switcher (Gated by `ENABLE_DEMO_MODE=true`):**
     * Button: *“Login as Salesman A (Mobile View)”*
     * Button: *“Login as Salesman B (Interstate View)”*
@@ -123,16 +125,18 @@ This document specifies the complete page architecture, routing structure, UI la
   * **"View / Download PDF" Button:** Generates and downloads an A4 GST Tax Invoice PDF containing company GSTIN, HSN codes, tax breakdown, and bank details.
   * **"e-Invoice / e-Way Bill JSON (Mock)" Action:** Generates mocked NIC IRN/Ack/QR metadata (`eInvoiceMeta`) and downloads compliant NIC e-Invoice JSON or e-Way Bill JSON payloads.
   * **"Share on WhatsApp" Button:** Opens WhatsApp Web / Mobile (`https://wa.me/?text=...`) with pre-composed text message and invoice link.
-  * **"Record Dispatch" Button:**
-    * Prompts confirmation of physical dispatch.
-    * Automatically writes negative debit to `StockLedger` & `StockBatch` (FIFO/FEFO) for Finished Goods (`DISPATCH_SALE`).
-    * Sets invoice `dispatchStatus` and order status to `DISPATCHED`.
-  * **"Cancel Invoice (Credit Note)" Action:**
-    * Opens Credit Note modal requiring audit cancellation rationale.
-    * Creates `CreditNote`, marks invoice `CANCELLED`, and restocks finished goods into `StockLedger` **only** if `dispatchStatus === 'DISPATCHED'`.
+    * **"Record Dispatch" Drawer (Full or Partial):**
+      * Supports splitting dispatch quantities per line (`PARTIALLY_DISPATCHED` $\rightarrow$ `DISPATCHED`), capturing optional vehicle # and notes.
+      * Automatically writes negative FEFO debit rows to `StockLedger` & `StockBatch` (`DISPATCH_SALE`) and creates a sequential `DispatchChallan` with downloadable **Delivery Challan PDF**.
+    * **"Sales Return" Drawer (Partial Credit Note):**
+      * Allows returning up to `dispatchedQty - previouslyReturnedQty` per line on posted/dispatched invoices, selecting `RESALEABLE` (restocked into `StockBatch` via `SALES_RETURN`) vs `DAMAGED` (audit/scrap only), and downloading a **Credit Note PDF**.
+    * **"Cancel Invoice (Credit Note)" Action:**
+      * Opens Credit Note modal requiring audit cancellation rationale.
+      * Creates `CreditNote`, marks invoice `CANCELLED`, and restocks only quantities that were physically dispatched.
 
 #### C. Inward Procurement Desk (`/admin/purchases`)
 * **Features & Controls:**
+  * **Pending Floor GRNs Queue:** Shows `PENDING_BILLING` deliveries logged by Floor Supervisors with 1-click **"Verify & Bill GRN"** (pre-filling Supplier, Challan/Bill Ref, and lines) or **"Reject"** (`ConfirmDialog` reason prompt).
   * Purchase Register Table: Purchase Ref, Vendor Name, Bill #, Date, Items, Total Value, Paid Amount, Payment Status (`UNPAID`, `PARTIAL`, `PAID`).
   * **"+ Record Inward Purchase" Button:** Opens inward entry modal.
   * **"Record Supplier Payment" Action (Per Row):** Logs vendor payment (`SupplierPayment`) via `CASH`/`UPI`/`BANK_TRANSFER`/`CHEQUE` and updates `Purchase.paidAmount` & `paymentStatus`.
@@ -165,7 +169,7 @@ This document specifies the complete page architecture, routing structure, UI la
   * **Items Tab:** Create/edit/deactivate (`active`) Raw Materials, Packaging, and Finished Goods with SKU code, canonical base unit (`KG`, `GRAM`, `LITRE`, `ML`, `PIECE`, `PACKET`, `CARTON`), optional `packWeightGrams`, `unitsPerCarton`, HSN code, GST %, selling price, and reorder level.
   * **Customers Tab:** Manage Retailers & Distributors with GSTIN, 2-digit State Code (`33`, `29`, etc.), address, phone, credit limit, credit days, assigned Salesman, and optional **`CustomerPrice`** SKU rate overrides.
   * **Suppliers Tab:** Manage raw/packaging suppliers with GSTIN, state code, phone, and address (soft-deactivatable via `active`).
-  * **Users & Roles Tab:** Create staff accounts, assign roles, activate/deactivate (`active` + increments `tokenVersion` to immediately revoke sessions), and unlock brute-force locked accounts.
+  * **Users & Roles Tab:** Create staff accounts, assign roles, reset temporary passwords (`mustChangePassword = true`, resolving Forgot Password requests and revoking active sessions), activate/deactivate (`active` + increments `tokenVersion`), and unlock brute-force locked accounts.
   * **Company Settings Tab:** Configure factory name, GSTIN, state code (`33`), address, bank details for PDF invoices, and default BOM variance tolerance (`3.00%`).
 
 #### F. Stock Adjustments & Expiry Alerts (`/admin/adjustments`)
@@ -220,7 +224,11 @@ This document specifies the complete page architecture, routing structure, UI la
       * Credits finished Murukku packets (+188) to a new `StockBatch` & `StockLedger`.
       * Saves production run record with variance flags, overhead cost breakdowns, and `AuditLog`.
 
-#### C. BOM Recipe Directory & Builder (`/production/boms`)
+#### C. Floor Goods Receipt (GRN) (`/production/receiving`)
+* **Features & Controls:**
+  * Log physical inward raw-material and packaging deliveries (`GRN/YY-YY/NNNN`) with supplier, challan #, batch #, and expiry date—strictly isolated from supplier pricing, GST, and payments until verified by Factory Admin.
+
+#### D. BOM Recipe Directory & Builder (`/production/boms`)
 * **Features & Controls:**
   * View all standard BOM recipes with expected yield, tolerance %, and unit cost estimate.
   * **"+ Create / Edit BOM Recipe" Modal:** Add raw material and packaging lines with flexible units (`KG`, `GRAM`, `LITRE`, `ML`, `PIECE`, `CARTON`), configure `batchSizeOutput` and `tolerancePercent`, or **Clone & Scale BOM** for a new pack size (e.g., scaling a 200 g recipe to a 500 g pack at `2.5x`).

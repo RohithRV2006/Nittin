@@ -27,7 +27,10 @@ export default async function AuditorReceivablesPage({
     prisma.customer.findMany({
       orderBy: { name: "asc" },
       include: {
-        invoices: { where: { status: InvoiceStatus.POSTED } },
+        invoices: {
+          where: { status: InvoiceStatus.POSTED },
+          include: { creditNotes: { select: { amount: true } } },
+        },
       },
     }),
     prisma.payment.findMany({
@@ -49,9 +52,15 @@ export default async function AuditorReceivablesPage({
     let b4 = money(0);
 
     for (const inv of c.invoices) {
-      const invTot = money(inv.totalAmount.toString());
+      let creditSum = money(0);
+      for (const cn of inv.creditNotes) {
+        creditSum = money(creditSum.plus(cn.amount.toString()));
+      }
+      const rawNet = money(inv.totalAmount.toString()).minus(creditSum);
+      const invTot = rawNet.gt(0) ? money(rawNet) : money(0);
       const invPaid = money(inv.paidAmount.toString());
-      const due = money(invTot.minus(invPaid));
+      const rawDue = money(invTot.minus(invPaid));
+      const due = rawDue.gt(0) ? rawDue : money(0);
 
       totalInvoiced = money(totalInvoiced.plus(invTot));
       totalPaid = money(totalPaid.plus(invPaid));
@@ -68,13 +77,14 @@ export default async function AuditorReceivablesPage({
       }
     }
 
+    const rawOut = money(totalInvoiced.minus(totalPaid));
     return {
       customerId: c.id,
       customerName: c.name,
       state: c.state,
       totalInvoiced: totalInvoiced.toFixed(2),
       totalPaid: totalPaid.toFixed(2),
-      outstanding: money(totalInvoiced.minus(totalPaid)).toFixed(2),
+      outstanding: (rawOut.gt(0) ? rawOut : money(0)).toFixed(2),
       bucket0_30: b1.toFixed(2),
       bucket31_60: b2.toFixed(2),
       bucket61_90: b3.toFixed(2),

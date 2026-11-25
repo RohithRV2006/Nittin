@@ -59,7 +59,30 @@ enum InvoiceStatus {
 
 enum DispatchStatus {
   PENDING_DISPATCH
+  PARTIALLY_DISPATCHED
   DISPATCHED
+}
+
+enum CreditNoteType {
+  CANCELLATION
+  SALES_RETURN
+}
+
+enum ReturnCondition {
+  RESALEABLE
+  DAMAGED
+}
+
+enum GrnStatus {
+  PENDING_BILLING
+  VERIFIED
+  REJECTED
+}
+
+enum ResetRequestStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
 }
 
 enum PaymentStatus {
@@ -81,6 +104,7 @@ enum MovementType {
   PRODUCTION_ISSUE
   PRODUCTION_OUTPUT
   DISPATCH_SALE
+  SALES_RETURN
   SCRAP_DAMAGE
   STOCK_ADJUSTMENT
 }
@@ -90,16 +114,20 @@ enum RefType {
   PURCHASE
   PRODUCTION_RUN
   INVOICE
+  DISPATCH_CHALLAN
   CREDIT_NOTE
+  GRN
   ADJUSTMENT
 }
 
 enum DocumentType {
   ORDER
   INVOICE
+  DISPATCH_CHALLAN
   CREDIT_NOTE
   PRODUCTION_RUN
   PURCHASE
+  GRN
 }
 
 model User {
@@ -110,23 +138,41 @@ model User {
   role                Role
   phone               String?
   active              Boolean   @default(true)
+  mustChangePassword  Boolean   @default(false)
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
   tokenVersion        Int       @default(1)
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  assignedCustomers  Customer[]        @relation("SalesmanCustomers")
-  orders             Order[]           @relation("SalesmanOrders")
-  supervisedRuns     ProductionRun[]   @relation("SupervisorRuns")
-  createdPurchases   Purchase[]        @relation("PurchaseCreatedBy")
-  createdInvoices    Invoice[]         @relation("InvoiceCreatedBy")
-  dispatchedInvoices Invoice[]         @relation("InvoiceDispatchedBy")
-  creditNotes        CreditNote[]      @relation("CreditNoteIssuedBy")
-  customerPayments   Payment[]         @relation("PaymentRecordedBy")
-  supplierPayments   SupplierPayment[] @relation("SupplierPaymentRecordedBy")
-  stockMovements     StockLedger[]     @relation("LedgerCreatedBy")
-  auditLogs          AuditLog[]
+  assignedCustomers     Customer[]             @relation("SalesmanCustomers")
+  orders                Order[]                @relation("SalesmanOrders")
+  supervisedRuns        ProductionRun[]        @relation("SupervisorRuns")
+  createdPurchases      Purchase[]             @relation("PurchaseCreatedBy")
+  createdInvoices       Invoice[]              @relation("InvoiceCreatedBy")
+  dispatchedInvoices    Invoice[]              @relation("InvoiceDispatchedBy")
+  dispatchChallans      DispatchChallan[]      @relation("ChallanDispatchedBy")
+  creditNotes           CreditNote[]           @relation("CreditNoteIssuedBy")
+  customerPayments      Payment[]              @relation("PaymentRecordedBy")
+  supplierPayments      SupplierPayment[]      @relation("SupplierPaymentRecordedBy")
+  receivedGrns          GoodsReceipt[]         @relation("GrnReceivedBy")
+  verifiedGrns          GoodsReceipt[]         @relation("GrnVerifiedBy")
+  passwordResetRequests PasswordResetRequest[]
+  stockMovements        StockLedger[]          @relation("LedgerCreatedBy")
+  auditLogs             AuditLog[]
+}
+
+model PasswordResetRequest {
+  id           String             @id @default(uuid())
+  userId       String
+  status       ResetRequestStatus @default(PENDING)
+  requestedAt  DateTime           @default(now())
+  resolvedById String?
+  resolvedAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, status])
 }
 
 model Customer {
@@ -179,8 +225,9 @@ model Supplier {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  purchases Purchase[]
-  payments  SupplierPayment[]
+  purchases     Purchase[]
+  payments      SupplierPayment[]
+  goodsReceipts GoodsReceipt[]
 }
 
 model Purchase {
@@ -200,12 +247,51 @@ model Purchase {
   createdById    String
   createdAt      DateTime      @default(now())
 
-  supplier  Supplier          @relation(fields: [supplierId], references: [id])
-  createdBy User              @relation("PurchaseCreatedBy", fields: [createdById], references: [id])
-  items     PurchaseItem[]
-  payments  SupplierPayment[]
+  supplier     Supplier          @relation(fields: [supplierId], references: [id])
+  createdBy    User              @relation("PurchaseCreatedBy", fields: [createdById], references: [id])
+  items        PurchaseItem[]
+  payments     SupplierPayment[]
+  goodsReceipt GoodsReceipt?
 
   @@index([supplierId, purchaseDate])
+}
+
+model GoodsReceipt {
+  id              String    @id @default(uuid())
+  grnNumber       String    @unique
+  supplierId      String
+  challanNumber   String
+  receivedDate    DateTime  @default(now())
+  status          GrnStatus @default(PENDING_BILLING)
+  notes           String?
+  receivedById    String
+  verifiedById    String?
+  verifiedAt      DateTime?
+  purchaseId      String?   @unique
+  rejectionReason String?
+  createdAt       DateTime  @default(now())
+
+  supplier   Supplier           @relation(fields: [supplierId], references: [id])
+  receivedBy User               @relation("GrnReceivedBy", fields: [receivedById], references: [id])
+  verifiedBy User?              @relation("GrnVerifiedBy", fields: [verifiedById], references: [id])
+  purchase   Purchase?          @relation(fields: [purchaseId], references: [id])
+  items      GoodsReceiptItem[]
+
+  @@index([status, receivedDate])
+}
+
+model GoodsReceiptItem {
+  id          String    @id @default(uuid())
+  grnId       String
+  itemId      String
+  quantity    Decimal   @db.Decimal(12, 3)
+  unit        UnitType
+  batchNumber String?
+  expiryDate  DateTime?
+  notes       String?
+
+  grn  GoodsReceipt @relation(fields: [grnId], references: [id])
+  item Item         @relation(fields: [itemId], references: [id])
 }
 
 model PurchaseItem {
@@ -263,8 +349,11 @@ model Item {
   boms                  BOM[]                   @relation("FinishedProductBOM")
   bomItems              BOMItem[]
   purchaseItems         PurchaseItem[]
+  goodsReceiptItems     GoodsReceiptItem[]
   orderItems            OrderItem[]
   invoiceItems          InvoiceItem[]
+  challanItems          DispatchChallanItem[]
+  creditNoteItems       CreditNoteItem[]
   productionConsumption ProductionConsumption[]
   stockBatches          StockBatch[]
   stockLedger           StockLedger[]
@@ -404,13 +493,14 @@ model Invoice {
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
-  order        Order         @relation(fields: [orderId], references: [id])
-  customer     Customer      @relation(fields: [customerId], references: [id])
-  createdBy    User          @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
-  dispatchedBy User?         @relation("InvoiceDispatchedBy", fields: [dispatchedById], references: [id])
-  items        InvoiceItem[]
-  payments     Payment[]
-  creditNotes  CreditNote[]
+  order            Order             @relation(fields: [orderId], references: [id])
+  customer         Customer          @relation(fields: [customerId], references: [id])
+  createdBy        User              @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
+  dispatchedBy     User?             @relation("InvoiceDispatchedBy", fields: [dispatchedById], references: [id])
+  items            InvoiceItem[]
+  dispatchChallans DispatchChallan[]
+  payments         Payment[]
+  creditNotes      CreditNote[]
 
   @@index([customerId, invoiceDate])
   @@index([status, invoiceDate])
@@ -422,6 +512,7 @@ model InvoiceItem {
   itemId        String
   hsnCode       String
   quantity      Decimal @db.Decimal(12, 3)
+  dispatchedQty Decimal @default(0.000) @db.Decimal(12, 3)
   unitPrice     Decimal @db.Decimal(12, 2)
   taxRate       Decimal @db.Decimal(5, 2)
   taxableAmount Decimal @db.Decimal(12, 2)
@@ -430,26 +521,78 @@ model InvoiceItem {
   igstAmount    Decimal @default(0.00) @db.Decimal(12, 2)
   totalAmount   Decimal @db.Decimal(12, 2)
 
-  invoice Invoice @relation(fields: [invoiceId], references: [id])
-  item    Item    @relation(fields: [itemId], references: [id])
+  invoice         Invoice               @relation(fields: [invoiceId], references: [id])
+  item            Item                  @relation(fields: [itemId], references: [id])
+  challanItems    DispatchChallanItem[]
+  creditNoteItems CreditNoteItem[]
+}
+
+model DispatchChallan {
+  id             String   @id @default(uuid())
+  challanNumber  String   @unique
+  invoiceId      String
+  dispatchedById String
+  dispatchedAt   DateTime @default(now())
+  vehicleNumber  String?
+  notes          String?
+
+  invoice      Invoice               @relation(fields: [invoiceId], references: [id])
+  dispatchedBy User                  @relation("ChallanDispatchedBy", fields: [dispatchedById], references: [id])
+  items        DispatchChallanItem[]
+
+  @@index([invoiceId, dispatchedAt])
+}
+
+model DispatchChallanItem {
+  id            String  @id @default(uuid())
+  challanId     String
+  invoiceItemId String
+  itemId        String
+  quantity      Decimal @db.Decimal(12, 3)
+
+  challan     DispatchChallan @relation(fields: [challanId], references: [id])
+  invoiceItem InvoiceItem     @relation(fields: [invoiceItemId], references: [id])
+  item        Item            @relation(fields: [itemId], references: [id])
 }
 
 model CreditNote {
-  id               String   @id @default(uuid())
-  creditNoteNumber String   @unique
+  id               String         @id @default(uuid())
+  creditNoteNumber String         @unique
   invoiceId        String
-  taxableAmount    Decimal  @db.Decimal(12, 2)
-  cgstAmount       Decimal  @default(0.00) @db.Decimal(12, 2)
-  sgstAmount       Decimal  @default(0.00) @db.Decimal(12, 2)
-  igstAmount       Decimal  @default(0.00) @db.Decimal(12, 2)
-  amount           Decimal  @db.Decimal(12, 2)
-  restocked        Boolean  @default(false)
+  type             CreditNoteType @default(CANCELLATION)
+  taxableAmount    Decimal        @db.Decimal(12, 2)
+  cgstAmount       Decimal        @default(0.00) @db.Decimal(12, 2)
+  sgstAmount       Decimal        @default(0.00) @db.Decimal(12, 2)
+  igstAmount       Decimal        @default(0.00) @db.Decimal(12, 2)
+  amount           Decimal        @db.Decimal(12, 2)
+  restocked        Boolean        @default(false)
   reason           String
   issuedById       String
-  issuedAt         DateTime @default(now())
+  issuedAt         DateTime       @default(now())
 
-  invoice  Invoice @relation(fields: [invoiceId], references: [id])
-  issuedBy User    @relation("CreditNoteIssuedBy", fields: [issuedById], references: [id])
+  invoice  Invoice          @relation(fields: [invoiceId], references: [id])
+  issuedBy User             @relation("CreditNoteIssuedBy", fields: [issuedById], references: [id])
+  items    CreditNoteItem[]
+}
+
+model CreditNoteItem {
+  id            String          @id @default(uuid())
+  creditNoteId  String
+  invoiceItemId String?
+  itemId        String
+  returnedQty   Decimal         @db.Decimal(12, 3)
+  condition     ReturnCondition @default(RESALEABLE)
+  unitPrice     Decimal         @db.Decimal(12, 2)
+  taxRate       Decimal         @db.Decimal(5, 2)
+  taxableAmount Decimal         @db.Decimal(12, 2)
+  cgstAmount    Decimal         @default(0.00) @db.Decimal(12, 2)
+  sgstAmount    Decimal         @default(0.00) @db.Decimal(12, 2)
+  igstAmount    Decimal         @default(0.00) @db.Decimal(12, 2)
+  totalAmount   Decimal         @db.Decimal(12, 2)
+
+  creditNote  CreditNote   @relation(fields: [creditNoteId], references: [id])
+  invoiceItem InvoiceItem? @relation(fields: [invoiceItemId], references: [id])
+  item        Item         @relation(fields: [itemId], references: [id])
 }
 
 model Payment {

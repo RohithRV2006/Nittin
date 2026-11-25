@@ -17,6 +17,7 @@ export interface VerifiedUser {
   name: string;
   role: Role;
   tokenVersion: number;
+  mustChangePassword: boolean;
 }
 
 export function isDemoModeEnabled(): boolean {
@@ -73,6 +74,7 @@ export async function requireVerifiedUser(
       role: true,
       active: true,
       tokenVersion: true,
+      mustChangePassword: true,
     },
   });
 
@@ -90,5 +92,6 @@ export async function requireVerifiedUser(
     name: user.name,
     role: user.role,
     tokenVersion: user.tokenVersion,
+    mustChangePassword: user.mustChangePassword,
   };
 }

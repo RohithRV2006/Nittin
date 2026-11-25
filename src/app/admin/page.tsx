@@ -39,7 +39,9 @@ export default async function AdminCommandCenterPage() {
     prisma.invoice.findMany({
       where: {
         status: InvoiceStatus.POSTED,
-        dispatchStatus: DispatchStatus.PENDING_DISPATCH,
+        dispatchStatus: {
+          in: [DispatchStatus.PENDING_DISPATCH, DispatchStatus.PARTIALLY_DISPATCHED],
+        },
       },
       orderBy: { invoiceDate: "desc" },
       take: 5,

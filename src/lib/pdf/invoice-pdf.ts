@@ -332,3 +332,159 @@ export async function downloadPaymentReceiptPdf(rec: PrintablePaymentReceipt) {
     `Receipt-${rec.customerName.replace(/\s+/g, "-")}-${rec.paymentDate}.pdf`
   );
 }
+
+export interface PrintableDeliveryChallan {
+  challanNumber: string;
+  invoiceNumber: string;
+  dispatchedDate: string;
+  vehicleNumber: string | null;
+  notes: string | null;
+  seller: { companyName: string; gstin: string; address: string };
+  buyer: { name: string; address: string; phone: string };
+  items: Array<{ itemName: string; quantity: string; unit: string }>;
+}
+
+export async function downloadDeliveryChallanPdf(ch: PrintableDeliveryChallan) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a5" });
+  const logo = await loadLogoDataUrl();
+  const leftX = logo ? 30 : 14;
+  if (logo) doc.addImage(logo, "PNG", 14, 12, 13, 13);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12.5);
+  doc.setTextColor(35, 23, 15);
+  doc.text(ch.seller.companyName, leftX, 17, { maxWidth: 105 });
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(92, 71, 56);
+  doc.text(`GSTIN: ${ch.seller.gstin}`, leftX, 22);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(120, 53, 15);
+  doc.text("DELIVERY CHALLAN", 14, 33);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(35, 23, 15);
+  doc.text(`Challan #: ${ch.challanNumber} | Invoice #: ${ch.invoiceNumber}`, 14, 39);
+  doc.text(
+    `Date: ${ch.dispatchedDate}${ch.vehicleNumber ? ` | Vehicle: ${ch.vehicleNumber}` : ""}`,
+    14,
+    44
+  );
+  doc.text(`Deliver To: ${ch.buyer.name} (${ch.buyer.phone})`, 14, 50);
+  doc.text(ch.buyer.address, 14, 55, { maxWidth: 120 });
+
+  autoTable(doc, {
+    startY: 63,
+    margin: { left: 14, right: 14 },
+    head: [["#", "Item Description", "Dispatched Qty"]],
+    body: ch.items.map((li, idx) => [
+      String(idx + 1),
+      li.itemName,
+      `${li.quantity} ${li.unit}`,
+    ]),
+    styles: { font: "helvetica", fontSize: 8.5, cellPadding: 2.3, textColor: [35, 23, 15] },
+    headStyles: { fillColor: [120, 53, 15], textColor: [255, 253, 249], fontStyle: "bold" },
+    columnStyles: { 0: { halign: "center", cellWidth: 10 }, 2: { halign: "right" } },
+  });
+
+  if (ch.notes) {
+    const finalY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 120;
+    doc.setFontSize(8);
+    doc.text(`Notes: ${ch.notes}`, 14, finalY + 8, { maxWidth: 120 });
+  }
+
+  doc.save(`${ch.challanNumber.replace(/\//g, "-")}.pdf`);
+}
+
+export interface PrintableCreditNote {
+  creditNoteNumber: string;
+  invoiceNumber: string;
+  issuedDate: string;
+  type: string;
+  reason: string;
+  seller: { companyName: string; gstin: string };
+  buyer: { name: string; gstin: string | null };
+  taxableAmount: string;
+  cgstAmount: string;
+  sgstAmount: string;
+  igstAmount: string;
+  amount: string;
+  items: Array<{
+    itemName: string;
+    returnedQty: string;
+    unit: string;
+    condition: string;
+    totalAmount: string;
+  }>;
+}
+
+export async function downloadCreditNotePdf(cn: PrintableCreditNote) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a5" });
+  const logo = await loadLogoDataUrl();
+  const leftX = logo ? 30 : 14;
+  if (logo) doc.addImage(logo, "PNG", 14, 12, 13, 13);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12.5);
+  doc.setTextColor(35, 23, 15);
+  doc.text(cn.seller.companyName, leftX, 17, { maxWidth: 105 });
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(92, 71, 56);
+  doc.text(`GSTIN: ${cn.seller.gstin}`, leftX, 22);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(120, 53, 15);
+  doc.text(`CREDIT NOTE (${cn.type.replace("_", " ")})`, 14, 33);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(35, 23, 15);
+  doc.text(`Credit Note #: ${cn.creditNoteNumber} | Against: ${cn.invoiceNumber}`, 14, 39);
+  doc.text(`Date: ${cn.issuedDate} | Customer: ${cn.buyer.name}`, 14, 44);
+  doc.text(`Reason: ${cn.reason}`, 14, 49, { maxWidth: 120 });
+
+  if (cn.items.length > 0) {
+    autoTable(doc, {
+      startY: 56,
+      margin: { left: 14, right: 14 },
+      head: [["Item", "Qty", "Condition", "Credit"]],
+      body: cn.items.map((li) => [
+        li.itemName,
+        `${li.returnedQty} ${li.unit}`,
+        li.condition,
+        formatPdfRs(li.totalAmount),
+      ]),
+      styles: { font: "helvetica", fontSize: 8, cellPadding: 2, textColor: [35, 23, 15] },
+      headStyles: { fillColor: [120, 53, 15], textColor: [255, 253, 249], fontStyle: "bold" },
+      columnStyles: { 1: { halign: "right" }, 3: { halign: "right" } },
+    });
+  }
+
+  const nextY =
+    cn.items.length > 0
+      ? ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 85) + 6
+      : 58;
+
+  autoTable(doc, {
+    startY: nextY,
+    margin: { left: 14, right: 14 },
+    body: [
+      ["Taxable Credit", formatPdfRs(cn.taxableAmount)],
+      ["CGST + SGST", formatPdfRs(Number(cn.cgstAmount) + Number(cn.sgstAmount))],
+      ["IGST", formatPdfRs(cn.igstAmount)],
+      ["Total Credit Note Value", formatPdfRs(cn.amount)],
+    ],
+    theme: "plain",
+    styles: { font: "helvetica", fontSize: 8.5, cellPadding: 1.5, textColor: [35, 23, 15] },
+    columnStyles: { 0: { textColor: [92, 71, 56] }, 1: { halign: "right", fontStyle: "bold" } },
+  });
+
+  doc.save(`${cn.creditNoteNumber.replace(/\//g, "-")}.pdf`);
+}

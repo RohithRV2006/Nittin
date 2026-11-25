@@ -11,6 +11,7 @@ import type {
 import { toast } from "sonner";
 import { UNIT_TYPES, USER_ROLES, isIntegerUnit } from "@/lib/enums";
 import {
+  adminResetUserPasswordAction,
   createUserAction,
   toggleCustomerActiveAction,
   toggleItemActiveAction,
@@ -25,6 +26,7 @@ import {
 } from "@/actions/masters.actions";
 import { InlineAlert } from "@/components/ui/InlineAlert";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { ResponsiveTable } from "@/components/ui/ResponsiveTable";
 import { SlideOverDrawer } from "@/components/ui/SlideOverDrawer";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -90,6 +92,7 @@ export interface MastersData {
     phone: string | null;
     active: boolean;
     lockedUntil: string | null;
+    pendingResetRequest?: boolean;
   }>;
 }
 
@@ -191,6 +194,12 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
 
   // User drawer
   const [userDrawerOpen, setUserDrawerOpen] = useState(false);
+  const [resetPwdTarget, setResetPwdTarget] = useState<{
+    id: string;
+    name: string;
+    email: string;
+  } | null>(null);
+  const [tempPassword, setTempPassword] = useState("");
   const [userForm, setUserForm] = useState<{
     name: string;
     email: string;
@@ -766,6 +775,9 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                   if (locked) {
                     return <StatusBadge status="ON_HOLD" customLabel="Locked" />;
                   }
+                  if (r.pendingResetRequest) {
+                    return <StatusBadge status="ON_HOLD" customLabel="Reset Requested" />;
+                  }
                   return (
                     <StatusBadge
                       status={r.active ? "SUFFICIENT" : "CANCELLED"}
@@ -791,6 +803,16 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                         Unlock
                       </button>
                     ) : null}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTempPassword("");
+                        setResetPwdTarget({ id: r.id, name: r.name, email: r.email });
+                      }}
+                      className="text-xs font-medium text-[var(--brand-primary)] hover:underline"
+                    >
+                      Reset Password
+                    </button>
                     <button
                       type="button"
                       onClick={() =>
@@ -1328,11 +1350,9 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
             />
           </div>
           <div>
-            <label className={labelCls}>Temporary Password (min 8 chars)</label>
-            <input
-              type="password"
+            <label className={labelCls}>Temporary Password (min 8 chars, letter + number)</label>
+            <PasswordInput
               minLength={8}
-              className={inputCls}
               required
               value={userForm.password}
               onChange={(e) =>
@@ -1372,6 +1392,56 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
             Create Account
           </button>
         </form>
+      </SlideOverDrawer>
+
+      {/* Admin Reset Password Drawer */}
+      <SlideOverDrawer
+        open={Boolean(resetPwdTarget)}
+        onClose={() => setResetPwdTarget(null)}
+        title={`Reset Password — ${resetPwdTarget?.name ?? ""}`}
+        subtitle="Issues a temporary password and revokes active sessions"
+      >
+        {resetPwdTarget ? (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              runAction(async () => {
+                const res = await adminResetUserPasswordAction({
+                  userId: resetPwdTarget.id,
+                  temporaryPassword: tempPassword,
+                });
+                if (res.ok) {
+                  setResetPwdTarget(null);
+                  setTempPassword("");
+                }
+                return res;
+              }, `Temporary password set for ${resetPwdTarget.email}.`);
+            }}
+            className="space-y-4"
+          >
+            <p className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-subtle)] p-3 text-xs text-[var(--text-secondary)]">
+              Account: <strong>{resetPwdTarget.email}</strong>. The user will be prompted to set a new personal password after signing in.
+            </p>
+            <div>
+              <label className={labelCls}>
+                New Temporary Password (min 8 chars, letter + number)
+              </label>
+              <PasswordInput
+                minLength={8}
+                required
+                value={tempPassword}
+                onChange={(e) => setTempPassword(e.target.value)}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isPending}
+              className="h-10 w-full rounded-lg bg-[var(--brand-primary)] text-sm font-semibold text-white hover:bg-[var(--brand-hover)] disabled:opacity-60"
+            >
+              {isPending ? "Updating..." : "Reset Password & Revoke Sessions"}
+            </button>
+          </form>
+        ) : null}
       </SlideOverDrawer>
     </div>
   );
