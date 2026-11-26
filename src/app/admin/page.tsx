@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { DispatchStatus, InvoiceStatus, OrderStatus } from "@prisma/client";
+import { DispatchStatus, GrnStatus, InvoiceStatus, OrderStatus, PaymentStatus } from "@prisma/client";
 import { InlineAlert } from "@/components/ui/InlineAlert";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { SetupChecklist } from "@/components/ui/SetupChecklist";
 import { StatCard } from "@/components/ui/StatCard";
+import { WorkflowPipeline } from "@/components/ui/WorkflowPipeline";
 import { formatINR, qty } from "@/lib/decimal";
 import { getItemStockMap } from "@/lib/engines/stock";
 import { prisma } from "@/lib/prisma";
@@ -18,6 +20,7 @@ export const metadata: Metadata = {
 export default async function AdminCommandCenterPage() {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
+  const soonCutoff = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
 
   const [
     settings,
@@ -25,7 +28,13 @@ export default async function AdminCommandCenterPage() {
     pendingDispatches,
     todayInvoices,
     todayPayments,
+    unpaidInvoicesCount,
+    pendingGrnsCount,
+    expiringLotsCount,
     items,
+    customersCount,
+    suppliersCount,
+    bomsCount,
     stockMap,
     recentAudits,
   ] = await Promise.all([
@@ -55,7 +64,22 @@ export default async function AdminCommandCenterPage() {
       where: { paymentDate: { gte: startOfDay } },
       _sum: { amount: true },
     }),
+    prisma.invoice.count({
+      where: {
+        status: InvoiceStatus.POSTED,
+        paymentStatus: { in: [PaymentStatus.UNPAID, PaymentStatus.PARTIAL] },
+      },
+    }),
+    prisma.goodsReceipt.count({
+      where: { status: GrnStatus.PENDING_BILLING },
+    }),
+    prisma.stockBatch.count({
+      where: { remainingQty: { gt: 0 }, expiryDate: { lte: soonCutoff } },
+    }),
     prisma.item.findMany({ where: { active: true } }),
+    prisma.customer.count({ where: { active: true } }),
+    prisma.supplier.count({ where: { active: true } }),
+    prisma.bOM.count({ where: { active: true } }),
     getItemStockMap(prisma),
     prisma.auditLog.findMany({
       orderBy: { createdAt: "desc" },
@@ -74,7 +98,7 @@ export default async function AdminCommandCenterPage() {
     <div className="space-y-6">
       <PageHeader
         title="Admin Command Center"
-        subtitle="Orders, billing, dispatch, procurement, and stock"
+        subtitle="Guided Sales-to-Cash and Supply-to-Stock operational hub"
         actions={
           <div className="flex flex-wrap gap-2">
             <Link
@@ -94,22 +118,104 @@ export default async function AdminCommandCenterPage() {
       />
 
       {!settings?.isConfigured ? (
-        <InlineAlert variant="warning" title="Complete Initial Factory Setup">
-          Your company GSTIN and state code are not configured yet.{" "}
-          <Link href="/admin/masters" className="font-semibold underline">
-            Configure Factory Profile →
-          </Link>
+        <InlineAlert variant="warning" title="Company GST Profile Pending">
+          The Business Owner has not configured the company GSTIN and operating state code yet. Ask the Owner to complete setup under Admins &amp; Company before billing or procurement.
         </InlineAlert>
       ) : null}
 
-      {lowStock.length > 0 ? (
-        <InlineAlert variant="warning" title="Low-Stock Items">
-          {lowStock.map((i) => i.name).join(", ")} —{" "}
-          <Link href="/admin/adjustments" className="font-semibold underline">
-            View Stock Lots →
-          </Link>
-        </InlineAlert>
-      ) : null}
+      <SetupChecklist
+        title="Factory Setup Checklist"
+        items={[
+          {
+            id: "owner-gst",
+            label: "Owner Configured GST",
+            done: Boolean(settings?.isConfigured),
+          },
+          {
+            id: "items",
+            label: "Raw & Finished SKUs",
+            done: items.length > 0,
+            href: "/admin/masters",
+            actionLabel: "Add SKUs →",
+          },
+          {
+            id: "parties",
+            label: "Customers & Suppliers",
+            done: customersCount > 0 && suppliersCount > 0,
+            href: "/admin/masters",
+            actionLabel: "Add Parties →",
+          },
+          {
+            id: "boms",
+            label: "BOM Recipes Active",
+            done: bomsCount > 0,
+            href: "/admin/boms",
+            actionLabel: "View BOMs →",
+          },
+        ]}
+      />
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <WorkflowPipeline
+          title="Sales-to-Cash Flow"
+          steps={[
+            {
+              step: 1,
+              title: "Verify Orders",
+              countLabel: `${pendingOrders.length} open`,
+              hint: "Check finished stock & approve into GST invoice",
+              href: "/admin/orders",
+              tone: pendingOrders.length > 0 ? "warning" : "success",
+            },
+            {
+              step: 2,
+              title: "Dispatch Goods",
+              countLabel: `${pendingDispatches.length} pending`,
+              hint: "Download PDF, ship full/partial challans, or returns",
+              href: "/admin/invoices",
+              tone: pendingDispatches.length > 0 ? "warning" : "success",
+            },
+            {
+              step: 3,
+              title: "Collect Dues",
+              countLabel: `${unpaidInvoicesCount} unpaid`,
+              hint: "Record receipts & print vouchers",
+              href: "/admin/payments",
+              tone: unpaidInvoicesCount > 0 ? "warning" : "success",
+            },
+          ]}
+        />
+
+        <WorkflowPipeline
+          title="Supply & Stock Flow"
+          steps={[
+            {
+              step: 1,
+              title: "Verify Floor GRNs",
+              countLabel: `${pendingGrnsCount} waiting`,
+              hint: "Price & post raw deliveries logged by Supervisor",
+              href: "/admin/purchases",
+              tone: pendingGrnsCount > 0 ? "warning" : "success",
+            },
+            {
+              step: 2,
+              title: "Low-Stock Watch",
+              countLabel: `${lowStock.length} low`,
+              hint: "Items at or below reorder threshold",
+              href: "/admin/adjustments",
+              tone: lowStock.length > 0 ? "danger" : "success",
+            },
+            {
+              step: 3,
+              title: "Expiring Batches",
+              countLabel: `${expiringLotsCount} soon`,
+              hint: "Lots expiring within 15 days",
+              href: "/admin/adjustments",
+              tone: expiringLotsCount > 0 ? "danger" : "success",
+            },
+          ]}
+        />
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard

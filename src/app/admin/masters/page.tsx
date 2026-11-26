@@ -4,8 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { MastersWorkspace, type MastersData } from "@/components/admin/MastersWorkspace";
 
 export const metadata: Metadata = {
-  title: "Masters & Settings",
-  description: "Manage GST profile, SKUs, customers, suppliers, and users.",
+  title: "Master Catalog & Staff",
+  description: "Manage SKUs, customers, suppliers, and staff users.",
 };
 
 export const dynamic = "force-dynamic";

@@ -44,3 +44,33 @@
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
+
+/* Theme-matched sleek scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--brand-primary);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}

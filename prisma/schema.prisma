@@ -160,6 +160,8 @@ model User {
   passwordResetRequests PasswordResetRequest[]
   stockMovements        StockLedger[]          @relation("LedgerCreatedBy")
   auditLogs             AuditLog[]
+
+  @@index([role, active])
 }
 
 model PasswordResetRequest {
@@ -196,6 +198,8 @@ model Customer {
   orders           Order[]
   invoices         Invoice[]
   payments         Payment[]
+
+  @@index([active, assignedSalesmanId])
 }
 
 model CustomerPrice {
@@ -254,6 +258,7 @@ model Purchase {
   goodsReceipt GoodsReceipt?
 
   @@index([supplierId, purchaseDate])
+  @@index([purchaseDate])
 }
 
 model GoodsReceipt {
@@ -358,6 +363,8 @@ model Item {
   stockBatches          StockBatch[]
   stockLedger           StockLedger[]
   customerPrices        CustomerPrice[]
+
+  @@index([active, category])
 }
 
 model BOM {
@@ -416,6 +423,7 @@ model ProductionRun {
   outputBatch  StockBatch?
 
   @@index([runDate(sort: Desc)])
+  @@index([status, runDate(sort: Desc)])
 }
 
 model ProductionConsumption {
@@ -504,6 +512,8 @@ model Invoice {
 
   @@index([customerId, invoiceDate])
   @@index([status, invoiceDate])
+  @@index([status, dispatchStatus])
+  @@index([status, paymentStatus])
 }
 
 model InvoiceItem {
@@ -612,6 +622,7 @@ model Payment {
   recordedBy User     @relation("PaymentRecordedBy", fields: [recordedById], references: [id])
 
   @@index([customerId, paymentDate])
+  @@index([paymentDate])
 }
 
 model StockBatch {
@@ -634,6 +645,8 @@ model StockBatch {
 
   @@index([itemId, receivedDate])
   @@index([itemId, expiryDate])
+  @@index([remainingQty])
+  @@index([expiryDate])
 }
 
 model StockLedger {
@@ -674,6 +687,7 @@ model AuditLog {
 
   @@index([entityType, entityId])
   @@index([createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
 }
 
 model CompanySettings {

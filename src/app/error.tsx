@@ -25,8 +25,13 @@ export default function GlobalError({
           Something went wrong
         </h1>
         <p className="mt-2 text-xs text-[var(--text-muted)]">
-          {error.message || "An unexpected error occurred while processing your request."}
+          We couldn&apos;t complete this request right now. Please try again, or contact your administrator if the issue persists.
         </p>
+        {error.digest ? (
+          <p className="mt-1 text-[11px] font-mono text-[var(--text-muted)]">
+            Reference: {error.digest}
+          </p>
+        ) : null}
         <div className="mt-6 flex justify-center gap-3">
           <button
             type="button"

@@ -10,7 +10,7 @@ export async function GET() {
         database: "connected",
         timestamp: new Date().toISOString(),
       },
-      { status: 200 }
+      { status: 200, headers: { "Cache-Control": "no-store" } }
     );
   } catch {
     return NextResponse.json(
@@ -19,7 +19,7 @@ export async function GET() {
         database: "unreachable",
         timestamp: new Date().toISOString(),
       },
-      { status: 503 }
+      { status: 503, headers: { "Cache-Control": "no-store" } }
     );
   }
 }

@@ -20,6 +20,8 @@ import {
   LogOut,
   Menu,
   PackageCheck,
+  PanelLeftClose,
+  PanelLeftOpen,
   PlusCircle,
   Receipt,
   Scale,
@@ -85,43 +87,48 @@ export interface NavItem {
   href: string;
   label: string;
   icon: NavIconKey;
+  group?: string;
   mobilePrimary?: boolean;
 }
 
-// Strict 1-role-per-portal navigation
+// Strict 1-role-per-portal navigation grouped by business workflow
 export const ROLE_NAV_ITEMS: Record<UserRole, NavItem[]> = {
   SALESMAN: [
-    { href: "/salesman", label: "Home", icon: "home", mobilePrimary: true },
-    { href: "/salesman/new-order", label: "New Order", icon: "plus", mobilePrimary: true },
-    { href: "/salesman/orders", label: "Orders & Sales", icon: "orders", mobilePrimary: true },
+    { href: "/salesman", label: "Home", icon: "home", group: "Field Workflow", mobilePrimary: true },
+    { href: "/salesman/new-order", label: "1. New Field Order", icon: "plus", group: "Field Workflow", mobilePrimary: true },
+    { href: "/salesman/orders", label: "2. Orders & Sales", icon: "orders", group: "Field Workflow", mobilePrimary: true },
   ],
   FACTORY_ADMIN: [
-    { href: "/admin", label: "Command Center", icon: "home", mobilePrimary: true },
-    { href: "/admin/orders", label: "Incoming Orders", icon: "clipboard", mobilePrimary: true },
-    { href: "/admin/invoices", label: "Invoices & Dispatch", icon: "receipt", mobilePrimary: true },
-    { href: "/admin/purchases", label: "Purchases", icon: "bag" },
-    { href: "/admin/payments", label: "Payments", icon: "rupee" },
-    { href: "/admin/adjustments", label: "Stock Adjustments", icon: "sliders" },
-    { href: "/admin/masters", label: "Masters & Setup", icon: "database" },
+    { href: "/admin", label: "Command Center", icon: "home", group: "Overview", mobilePrimary: true },
+    { href: "/admin/orders", label: "1. Incoming Orders", icon: "clipboard", group: "Sales & Cash Loop", mobilePrimary: true },
+    { href: "/admin/invoices", label: "2. Invoices & Dispatch", icon: "receipt", group: "Sales & Cash Loop", mobilePrimary: true },
+    { href: "/admin/payments", label: "3. Payment Collections", icon: "rupee", group: "Sales & Cash Loop" },
+    { href: "/admin/purchases", label: "Purchases & GRNs", icon: "bag", group: "Factory & Catalog" },
+    { href: "/admin/adjustments", label: "Stock & Adjustments", icon: "sliders", group: "Factory & Catalog" },
+    { href: "/admin/boms", label: "BOM Recipes", icon: "book", group: "Factory & Catalog" },
+    { href: "/admin/masters", label: "Masters & Staff", icon: "database", group: "Factory & Catalog" },
   ],
   PRODUCTION_SUPERVISOR: [
-    { href: "/production", label: "Floor Overview", icon: "factory", mobilePrimary: true },
-    { href: "/production/new-run", label: "New Batch Run", icon: "plus", mobilePrimary: true },
-    { href: "/production/receiving", label: "Goods Receipt (GRN)", icon: "package", mobilePrimary: true },
-    { href: "/production/boms", label: "BOM Recipes", icon: "book" },
+    { href: "/production", label: "Floor Overview", icon: "factory", group: "Overview", mobilePrimary: true },
+    { href: "/production/receiving", label: "1. Gate Receipt (GRN)", icon: "package", group: "Floor Workflow", mobilePrimary: true },
+    { href: "/production/new-run", label: "2. Batch Runs", icon: "plus", group: "Floor Workflow", mobilePrimary: true },
+    { href: "/production/boms", label: "3. BOM Recipes", icon: "book", group: "Floor Workflow" },
   ],
   AUDITOR: [
-    { href: "/auditor", label: "Report Center", icon: "home", mobilePrimary: true },
-    { href: "/auditor/sales-register", label: "Sales Register", icon: "file" },
-    { href: "/auditor/gst-summary", label: "GST Summary", icon: "scale" },
-    { href: "/auditor/purchase-register", label: "Purchase Register", icon: "bag" },
-    { href: "/auditor/stock-ledger", label: "Stock Ledger", icon: "package", mobilePrimary: true },
-    { href: "/auditor/production-report", label: "Production Report", icon: "activity" },
-    { href: "/auditor/receivables", label: "Receivables", icon: "rupee", mobilePrimary: true },
-    { href: "/auditor/audit-log", label: "Audit Trail", icon: "shield" },
+    { href: "/auditor", label: "Report Center", icon: "home", group: "Overview", mobilePrimary: true },
+    { href: "/auditor/sales-register", label: "Sales Register", icon: "file", group: "Statutory Registers" },
+    { href: "/auditor/gst-summary", label: "GST Summary", icon: "scale", group: "Statutory Registers" },
+    { href: "/auditor/purchase-register", label: "Purchase Register", icon: "bag", group: "Statutory Registers" },
+    { href: "/auditor/stock-ledger", label: "Stock Ledger", icon: "package", group: "Statutory Registers", mobilePrimary: true },
+    { href: "/auditor/production-report", label: "Production Report", icon: "activity", group: "Statutory Registers" },
+    { href: "/auditor/receivables", label: "Receivables", icon: "rupee", group: "Statutory Registers", mobilePrimary: true },
+    { href: "/auditor/audit-log", label: "Audit Trail", icon: "shield", group: "Compliance" },
   ],
   OWNER: [
-    { href: "/dashboard", label: "Executive Dashboard", icon: "chart", mobilePrimary: true },
+    { href: "/dashboard", label: "Executive Overview", icon: "chart", group: "Control Tower", mobilePrimary: true },
+    { href: "/dashboard/reports", label: "Analytics & Reports", icon: "spreadsheet", group: "Control Tower", mobilePrimary: true },
+    { href: "/dashboard/audit", label: "Audit Trail", icon: "shield", group: "Governance" },
+    { href: "/dashboard/team", label: "Admins & Company", icon: "users", group: "Governance", mobilePrimary: true },
   ],
 };
 
@@ -144,6 +151,7 @@ export function AppShell({
 }: AppShellProps) {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [online, setOnline] = useState(true);
   const [pwdOpen, setPwdOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -180,6 +188,11 @@ export function AppShell({
   };
 
   useEffect(() => {
+    try {
+      setSidebarCollapsed(localStorage.getItem("nittin_sidebar_collapsed") === "1");
+    } catch {
+      // Ignore storage errors
+    }
     setOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
     const handleOnline = () => setOnline(true);
     const handleOffline = () => setOnline(false);
@@ -190,6 +203,18 @@ export function AppShell({
       window.removeEventListener("offline", handleOffline);
     };
   }, []);
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("nittin_sidebar_collapsed", next ? "1" : "0");
+      } catch {
+        // Ignore storage errors
+      }
+      return next;
+    });
+  };
 
   const navItems = ROLE_NAV_ITEMS[userRole] ?? [];
   const mobileBottomItems = navItems.filter((item) => item.mobilePrimary).slice(0, 4);
@@ -209,72 +234,125 @@ export function AppShell({
 
   return (
     <div className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)]">
-      {/* Desktop Persistent Sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-[var(--border-default)] bg-[var(--bg-surface)] lg:flex">
-        <div className="flex h-14 items-center gap-2.5 border-b border-[var(--border-default)] px-4">
+      {/* Desktop Persistent Collapsible Sidebar */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-30 hidden flex-col border-r border-[var(--border-default)] bg-[var(--bg-surface)] transition-all duration-200 lg:flex ${
+          sidebarCollapsed ? "w-[72px]" : "w-60"
+        }`}
+      >
+        <div
+          className={`flex h-14 items-center border-b border-[var(--border-default)] ${
+            sidebarCollapsed ? "justify-center px-2" : "gap-2.5 px-4"
+          }`}
+        >
           <Image
             src="/nittin.png"
             alt="Nittin Logo"
             width={34}
             height={34}
             unoptimized
-            className="h-8 w-8 rounded-full object-cover"
+            className="h-8 w-8 shrink-0 rounded-full object-cover"
           />
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-[var(--text-primary)]">
-              Nittin ERP
-            </p>
-            <p className="truncate text-[11px] text-[var(--text-muted)]">
-              {companyName}
-            </p>
-          </div>
+          {!sidebarCollapsed ? (
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-[var(--text-primary)]">
+                Nittin ERP
+              </p>
+              <p className="truncate text-[11px] text-[var(--text-muted)]">
+                {companyName}
+              </p>
+            </div>
+          ) : null}
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-          {navItems.map((item) => {
+          {navItems.map((item, idx) => {
             const Icon = ICONS[item.icon];
             const active = isActive(item.href);
+            const showGroup =
+              item.group && (idx === 0 || navItems[idx - 1]?.group !== item.group);
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                  active
-                    ? "bg-[var(--brand-soft)] text-[var(--brand-primary)]"
-                    : "text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]"
-                }`}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                <span className="truncate">{item.label}</span>
-              </Link>
+              <div key={item.href}>
+                {showGroup ? (
+                  sidebarCollapsed ? (
+                    idx > 0 ? (
+                      <div className="my-2 border-t border-[var(--border-default)]" />
+                    ) : null
+                  ) : (
+                    <p
+                      className={`px-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] ${
+                        idx === 0 ? "mb-1" : "mt-4 mb-1"
+                      }`}
+                    >
+                      {item.group}
+                    </p>
+                  )
+                ) : null}
+                <Link
+                  href={item.href}
+                  onClick={(e) => {
+                    if (!online && item.href !== pathname) {
+                      e.preventDefault();
+                      toast.info("You are offline. Reconnect before switching pages.");
+                    }
+                  }}
+                  title={sidebarCollapsed ? item.label : undefined}
+                  className={`flex items-center rounded-lg py-2 text-sm font-medium transition ${
+                    sidebarCollapsed ? "justify-center px-2" : "gap-2.5 px-3"
+                  } ${
+                    active
+                      ? "bg-[var(--brand-soft)] text-[var(--brand-primary)]"
+                      : "text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]"
+                  }`}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  {!sidebarCollapsed ? (
+                    <span className="truncate">{item.label}</span>
+                  ) : null}
+                </Link>
+              </div>
             );
           })}
         </nav>
 
-        <div className="border-t border-[var(--border-default)] p-3">
-          <div className="mb-2 px-2">
-            <p className="truncate text-xs font-medium text-[var(--text-primary)]">
-              {userName}
-            </p>
-            <p className="truncate text-[11px] text-[var(--text-muted)]">
-              {ROLE_LABELS[userRole]}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setPwdOpen(true)}
-            className="mb-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]"
-          >
-            <KeyRound className="h-4 w-4" />
-            Change Password
-          </button>
+        <div className="border-t border-[var(--border-default)] p-3 pb-4">
+          {!sidebarCollapsed ? (
+            <div className="mb-2 px-2">
+              <p className="truncate text-xs font-medium text-[var(--text-primary)]">
+                {userName}
+              </p>
+            </div>
+          ) : (
+            <div
+              title={userName}
+              className="mx-auto mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-[var(--brand-soft)] text-xs font-semibold text-[var(--brand-primary)]"
+            >
+              {userName.trim().charAt(0).toUpperCase() || "U"}
+            </div>
+          )}
+          {userRole !== "OWNER" ? (
+            <button
+              type="button"
+              onClick={() => setPwdOpen(true)}
+              title={sidebarCollapsed ? "Change Password" : undefined}
+              className={`mb-1 flex w-full items-center rounded-lg py-2 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] ${
+                sidebarCollapsed ? "justify-center px-2" : "gap-2 px-2.5"
+              }`}
+            >
+              <KeyRound className="h-4 w-4 shrink-0" />
+              {!sidebarCollapsed ? <span>Change Password</span> : null}
+            </button>
+          ) : null}
           <form action={logoutAction}>
             <button
               type="submit"
-              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--bg-subtle)] hover:text-[#B91C1C] dark:hover:text-[#F87171]"
+              title={sidebarCollapsed ? "Sign Out" : undefined}
+              className={`flex w-full items-center rounded-lg py-2 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--bg-subtle)] hover:text-[#B91C1C] dark:hover:text-[#F87171] ${
+                sidebarCollapsed ? "justify-center px-2" : "gap-2 px-2.5"
+              }`}
             >
-              <LogOut className="h-4 w-4" />
-              Sign Out
+              <LogOut className="h-4 w-4 shrink-0" />
+              {!sidebarCollapsed ? <span>Sign Out</span> : null}
             </button>
           </form>
         </div>
@@ -319,7 +397,13 @@ export function AppShell({
                   <Link
                     key={item.href}
                     href={item.href}
-                    onClick={() => setDrawerOpen(false)}
+                    onClick={(e) => {
+                      setDrawerOpen(false);
+                      if (!online && item.href !== pathname) {
+                        e.preventDefault();
+                        toast.info("You are offline. Reconnect before switching pages.");
+                      }
+                    }}
                     className={`flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
                       active
                         ? "bg-[var(--brand-soft)] text-[var(--brand-primary)]"
@@ -333,23 +417,22 @@ export function AppShell({
               })}
             </nav>
             <div className="border-t border-[var(--border-default)] p-4">
-              <p className="text-xs font-medium text-[var(--text-primary)]">
+              <p className="mb-3 text-xs font-medium text-[var(--text-primary)]">
                 {userName}
               </p>
-              <p className="mb-3 text-[11px] text-[var(--text-muted)]">
-                {ROLE_LABELS[userRole]}
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setDrawerOpen(false);
-                  setPwdOpen(true);
-                }}
-                className="mb-2 flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-[var(--border-default)] px-3 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
-              >
-                <KeyRound className="h-4 w-4" />
-                Change Password
-              </button>
+              {userRole !== "OWNER" ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDrawerOpen(false);
+                    setPwdOpen(true);
+                  }}
+                  className="mb-2 flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-[var(--border-default)] px-3 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
+                >
+                  <KeyRound className="h-4 w-4" />
+                  Change Password
+                </button>
+              ) : null}
               <form action={logoutAction}>
                 <button
                   type="submit"
@@ -365,10 +448,14 @@ export function AppShell({
       ) : null}
 
       {/* Main Content Wrapper */}
-      <div className="flex min-h-screen flex-col lg:pl-60">
+      <div
+        className={`flex min-h-screen flex-col transition-all duration-200 ${
+          sidebarCollapsed ? "lg:pl-[72px]" : "lg:pl-60"
+        }`}
+      >
         {/* Top Utility Bar */}
         <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-4 sm:px-6">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
@@ -376,6 +463,19 @@ export function AppShell({
               aria-label="Open menu"
             >
               <Menu className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              className="hidden rounded-lg p-1.5 text-[var(--text-secondary)] transition hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] lg:inline-flex"
+            >
+              {sidebarCollapsed ? (
+                <PanelLeftOpen className="h-4 w-4" />
+              ) : (
+                <PanelLeftClose className="h-4 w-4" />
+              )}
             </button>
             <div className="flex items-center gap-2 lg:hidden">
               <Image
@@ -396,13 +496,17 @@ export function AppShell({
           </div>
 
           <div className="flex items-center gap-2">
-            {!isConfigured && userRole === "FACTORY_ADMIN" ? (
+            {!isConfigured && userRole === "OWNER" ? (
               <Link
-                href="/admin/masters"
+                href="/dashboard/team"
                 className="rounded-full border border-[#FDE68A] bg-[#FFFBEB] px-2.5 py-0.5 text-xs font-medium text-[#B45309] dark:border-[#92400E] dark:bg-[#451A03] dark:text-[#FBBF24]"
               >
-                Setup Factory
+                Setup Company
               </Link>
+            ) : !isConfigured && userRole === "FACTORY_ADMIN" ? (
+              <span className="rounded-full border border-[#FDE68A] bg-[#FFFBEB] px-2.5 py-0.5 text-xs font-medium text-[#B45309] dark:border-[#92400E] dark:bg-[#451A03] dark:text-[#FBBF24]">
+                Owner Setup Pending
+              </span>
             ) : null}
             <span
               className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${
@@ -429,7 +533,7 @@ export function AppShell({
 
         {/* Page Body */}
         <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-5 pb-24 sm:px-6 sm:py-6 lg:pb-8">
-          {mustChangePassword && !pwdChangedLocal ? (
+          {userRole !== "OWNER" && mustChangePassword && !pwdChangedLocal ? (
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
               <span>
                 Your password was reset by an administrator. Please set a new personal password now.
@@ -447,12 +551,13 @@ export function AppShell({
         </main>
       </div>
 
-      <SlideOverDrawer
-        open={pwdOpen}
-        onClose={() => setPwdOpen(false)}
-        title="Change Account Password"
-        subtitle="Minimum 8 characters with at least one letter and one number"
-      >
+      {userRole !== "OWNER" ? (
+        <SlideOverDrawer
+          open={pwdOpen}
+          onClose={() => setPwdOpen(false)}
+          title="Change Account Password"
+          subtitle="Minimum 8 characters with at least one letter and one number"
+        >
         <form onSubmit={handlePasswordSubmit} className="space-y-4">
           <div>
             <label className="mb-1 block text-xs font-medium text-[var(--text-secondary)]">
@@ -497,7 +602,8 @@ export function AppShell({
             {pwdSaving ? "Updating..." : "Save New Password"}
           </button>
         </form>
-      </SlideOverDrawer>
+        </SlideOverDrawer>
+      ) : null}
 
       {/* Mobile Bottom Navigation Bar */}
       {mobileBottomItems.length > 0 ? (
@@ -509,6 +615,12 @@ export function AppShell({
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={(e) => {
+                  if (!online && item.href !== pathname) {
+                    e.preventDefault();
+                    toast.info("You are offline. Reconnect before switching pages.");
+                  }
+                }}
                 className={`flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] font-medium ${
                   active
                     ? "text-[var(--brand-primary)]"

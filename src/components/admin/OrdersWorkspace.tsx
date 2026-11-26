@@ -161,7 +161,13 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
       }
       setSelected(null);
       toast.success(
-        `Generated GST Invoice ${res.data?.invoiceNumber ?? ""}. Ready for PDF/Dispatch.`
+        `Generated GST Invoice ${res.data?.invoiceNumber ?? ""}. Ready for PDF/Dispatch.`,
+        {
+          action: {
+            label: "Open Dispatch →",
+            onClick: () => router.push("/admin/invoices"),
+          },
+        }
       );
       router.refresh();
     });
@@ -210,8 +216,8 @@ export function OrdersWorkspace({ data }: { data: OrdersPageData }) {
       />
 
       {!data.factoryConfigured ? (
-        <InlineAlert variant="warning" title="Factory Profile Missing">
-          Configure your factory GSTIN and state code under Masters before approving orders into GST invoices.
+        <InlineAlert variant="warning" title="Company GST Profile Missing">
+          Ask the Business Owner to configure the company GSTIN and state code before approving orders into GST invoices.
         </InlineAlert>
       ) : null}
 

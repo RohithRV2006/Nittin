@@ -1,4 +1,5 @@
 "use server";
+import { toSafeErrorMessage } from "@/lib/errors";
 
 import { revalidatePath } from "next/cache";
 import {
@@ -250,7 +251,7 @@ export async function approveAndInvoiceOrderAction(
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to generate GST invoice",
+      error: toSafeErrorMessage(err, "Failed to generate GST invoice"),
     };
   }
 }
@@ -292,7 +293,7 @@ export async function holdOrderAction(input: unknown): Promise<ActionResult> {
     revalidatePath("/salesman/orders");
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Action failed" };
+    return { ok: false, error: toSafeErrorMessage(err, "Action failed") };
   }
 }
 
@@ -334,7 +335,7 @@ export async function rejectOrderAction(input: unknown): Promise<ActionResult> {
     revalidatePath("/salesman/orders");
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Rejection failed" };
+    return { ok: false, error: toSafeErrorMessage(err, "Rejection failed") };
   }
 }
 
@@ -522,7 +523,7 @@ export async function recordDispatchAction(
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to record dispatch",
+      error: toSafeErrorMessage(err, "Failed to record dispatch"),
     };
   }
 }
@@ -780,7 +781,7 @@ export async function recordSalesReturnAction(input: unknown): Promise<
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to record sales return",
+      error: toSafeErrorMessage(err, "Failed to record sales return"),
     };
   }
 }
@@ -897,7 +898,7 @@ export async function cancelInvoiceWithCreditNoteAction(
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to issue credit note",
+      error: toSafeErrorMessage(err, "Failed to issue credit note"),
     };
   }
 }
@@ -1003,7 +1004,7 @@ export async function generateMockEInvoiceAction(invoiceId: string): Promise<
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to generate e-Invoice JSON",
+      error: toSafeErrorMessage(err, "Failed to generate e-Invoice JSON"),
     };
   }
 }
@@ -1185,7 +1186,7 @@ export async function recordCustomerPaymentAction(
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to record payment",
+      error: toSafeErrorMessage(err, "Failed to record payment"),
     };
   }
 }

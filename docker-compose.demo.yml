@@ -1,0 +1,31 @@
+# Evaluator Demo Override — runs with an isolated Demo PostgreSQL database
+# and automatically seeds the Section 5 Benchmark dataset on boot.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.demo.yml up --build
+
+services:
+  postgres:
+    container_name: nittin_postgres_demo
+    environment:
+      POSTGRES_DB: nittin_erp_demo
+    volumes:
+      - nittin_pgdata_demo:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d nittin_erp_demo"]
+
+  db-init:
+    container_name: nittin_db_init_demo
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/nittin_erp_demo?sslmode=disable
+      DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:-DemoPass@123}
+    command: ["sh", "-c", "npx prisma db push --skip-generate && npx tsx prisma/seed-demo.ts"]
+
+  app:
+    container_name: nittin_erp_demo_app
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/nittin_erp_demo?sslmode=disable
+      DIRECT_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/nittin_erp_demo?sslmode=disable
+      ENABLE_DEMO_MODE: "true"
+      DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:-DemoPass@123}
+
+volumes:
+  nittin_pgdata_demo:

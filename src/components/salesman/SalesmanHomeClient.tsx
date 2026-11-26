@@ -7,6 +7,7 @@ import { OfflineSyncBanner } from "@/components/salesman/OfflineSyncBanner";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatCard } from "@/components/ui/StatCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { WorkflowPipeline } from "@/components/ui/WorkflowPipeline";
 import { formatINR } from "@/lib/decimal";
 
 export interface SalesmanHomeData {
@@ -43,6 +44,26 @@ export function SalesmanHomeClient({ data }: { data: SalesmanHomeData }) {
       />
 
       <OfflineSyncBanner />
+
+      <WorkflowPipeline
+        title="Field Sales Flow"
+        steps={[
+          {
+            step: 1,
+            title: "Capture Customer Order",
+            countLabel: `${data.activeCustomersCount} customers`,
+            hint: "Works offline & syncs automatically on 3G/4G",
+            href: "/salesman/new-order",
+          },
+          {
+            step: 2,
+            title: "Track Dispatch & Sales",
+            countLabel: `${data.recentOrders.length} recent`,
+            hint: "Check Factory Admin approvals & customer totals",
+            href: "/salesman/orders",
+          },
+        ]}
+      />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard label="Today's Orders" value={data.todayOrderCount} />

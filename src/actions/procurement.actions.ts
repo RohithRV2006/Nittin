@@ -1,9 +1,11 @@
 "use server";
+import { toSafeErrorMessage } from "@/lib/errors";
 
 import { revalidatePath } from "next/cache";
 import {
   DocumentType,
   GrnStatus,
+  ItemCategory,
   MovementType,
   PaymentStatus,
   RefType,
@@ -52,7 +54,7 @@ export async function recordPurchaseAction(
       });
       if (!settings?.isConfigured || !settings.stateCode) {
         throw new Error(
-          "Configure your factory GST profile and state code at /admin/masters before recording purchases."
+          "Company GST profile and state code must be configured by the Business Owner before recording purchases."
         );
       }
 
@@ -82,6 +84,11 @@ export async function recordPurchaseAction(
         const item = itemMap.get(line.itemId);
         if (!item || !item.active) {
           throw new Error("One or more selected items are missing or inactive.");
+        }
+        if (item.category === ItemCategory.FINISHED_GOOD) {
+          throw new Error(
+            `${item.name} is a Finished Good and cannot be purchased via inward procurement; produce it via a Production Run.`
+          );
         }
 
         const baseQty = convertUnit(line.quantity, line.inputUnit, item.unit, {
@@ -220,7 +227,7 @@ export async function recordPurchaseAction(
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to record purchase",
+      error: toSafeErrorMessage(err, "Failed to record purchase"),
     };
   }
 }
@@ -307,7 +314,7 @@ export async function createGoodsReceiptAction(
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to log GRN",
+      error: toSafeErrorMessage(err, "Failed to log GRN"),
     };
   }
 }
@@ -354,7 +361,7 @@ export async function rejectGoodsReceiptAction(
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to reject GRN",
+      error: toSafeErrorMessage(err, "Failed to reject GRN"),
     };
   }
 }
@@ -436,7 +443,7 @@ export async function recordSupplierPaymentAction(
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to record supplier payment",
+      error: toSafeErrorMessage(err, "Failed to record supplier payment"),
     };
   }
 }
@@ -513,7 +520,7 @@ export async function recordStockAdjustmentAction(
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to record adjustment",
+      error: toSafeErrorMessage(err, "Failed to record adjustment"),
     };
   }
 }

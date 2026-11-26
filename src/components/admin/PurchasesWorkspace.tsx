@@ -291,8 +291,8 @@ export function PurchasesWorkspace({ data }: { data: PurchasesPageData }) {
       />
 
       {!data.factoryConfigured ? (
-        <InlineAlert variant="warning" title="Factory Profile Missing">
-          Configure your factory GSTIN and state code under Masters before recording purchases.
+        <InlineAlert variant="warning" title="Company GST Profile Missing">
+          Ask the Business Owner to configure the company GSTIN and state code before recording purchases.
         </InlineAlert>
       ) : null}
 

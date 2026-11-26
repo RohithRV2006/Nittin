@@ -168,7 +168,7 @@ describe("Phase 5 Tally Exports & Full Section 5 Benchmark Proof", () => {
       financialYear: "2026-27",
       seller: {
         gstin: "33AABCN1234F1Z5",
-        legalName: "Nittin Traditional Foods Pvt. Ltd.",
+        legalName: "Nittin Foods Pvt. Ltd.",
         address: "SIDCO",
         state: "Tamil Nadu",
         stateCode: "33",

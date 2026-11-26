@@ -6,6 +6,7 @@ import type { UnitType } from "@prisma/client";
 import { Minus, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { submitFieldOrderAction } from "@/actions/salesman.actions";
+import { OfflineSyncBanner } from "@/components/salesman/OfflineSyncBanner";
 import { InlineAlert } from "@/components/ui/InlineAlert";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { formatINR, money, toDec } from "@/lib/decimal";
@@ -191,14 +192,19 @@ export function NewOrderWorkspace({
       estimatedTotal: summary.total.toFixed(2),
       queuedAt: new Date().toISOString(),
     });
+    window.dispatchEvent(new Event("nittin-offline-queue-updated"));
+    setNotes("");
+    const isOnline = typeof navigator === "undefined" || navigator.onLine;
     toast.warning(
       `Saved offline for ${selectedCustomer.name}. Auto-syncs when online.`,
-      {
-        action: {
-          label: "View Queue",
-          onClick: () => router.push("/salesman/orders"),
-        },
-      }
+      isOnline
+        ? {
+            action: {
+              label: "View Queue",
+              onClick: () => router.push("/salesman/orders"),
+            },
+          }
+        : undefined
     );
   };
 
@@ -258,6 +264,8 @@ export function NewOrderWorkspace({
         title="New Field Order"
         subtitle="Select customer, tap packet counts, and submit to factory"
       />
+
+      <OfflineSyncBanner />
 
       {catalog.customers.length === 0 || catalog.products.length === 0 ? (
         <InlineAlert variant="warning" title="Catalog Not Ready">
