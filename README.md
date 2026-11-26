@@ -1,155 +1,186 @@
-# Nittin — Order-to-Audit ERP for Small-Scale Food Manufacturing
+# Nittin — Order-to-Audit ERP for Food Manufacturing
 
-**Nittin** is a single-entry **Order-to-Audit ERP** built for small-scale packaged South Indian snack manufacturers (murukku, mixture, chips, sweets). Every business event is entered once at its source—from a field salesman's phone to the factory gate, production floor, billing desk, and statutory auditor—converging on an immutable **Stock Ledger** with FIFO/FEFO lot valuation.
-
----
-
-## Tech Stack & Justification
-
-We chose **Next.js 15 (App Router, TypeScript)** with **Tailwind CSS** and **PostgreSQL (Neon Serverless / Docker Postgres)** mediated by **Prisma ORM** because one full-stack codebase cleanly delivers mobile-first PWA screens for field salesmen alongside data-dense desktop tables for admins and auditors—with zero CORS or separate API maintenance. All financial, GST, and inventory math runs strictly server-side inside `prisma.$transaction` with `decimal.js` (`Decimal(12, 2)` money, `Decimal(12, 3)` quantities) so figures never drift through floating-point rounding.
-
-* **UI & UX:** `Tailwind CSS v4` (warm roasted-brown, ivory, & amber palette derived from `nittin.png`), `next-themes` (Light/Dark mode), `sonner` toast notifications, accessible custom React confirmation dialogs (`ConfirmDialog`), and `lucide-react`.
-* **Security & Auth:** `jose` HS256 JWT `HttpOnly` cookies (checked at Edge Middleware + DB-backed `User.active` / `tokenVersion` verification on every Server Action), `bcryptjs` password hashing, sliding-window rate limiting, brute-force account lockout, `Zod` server validation, and CWE-1236 spreadsheet sanitization.
-* **Exports:** `jsPDF` + `jspdf-autotable` (A4 Tax Invoices, Delivery Challans, Credit Notes, Payment Receipt Vouchers, and Auditor Report PDFs with embedded company logo), `xlsx` (`.xlsx` & CSV), and Tally XML exports.
+**Nittin ERP** is a production-ready, single-entry **Order-to-Audit ERP** purpose-built for packaged South Indian food manufacturers (**Nittin Foods Pvt. Ltd.** — murukku, mixture, chips, and traditional sweets). Every operational event is captured once at its source—on a field salesman's phone, at the factory gate, on the production floor, at the billing desk, or in the auditor's office—converging cleanly on an immutable **Stock Ledger** with **FIFO/FEFO** batch costing and GST compliance.
 
 ---
 
-## Scope & Requirements Satisfied (`docs/PS.md`)
+## The Story of Nittin ERP: One Loaf-to-Ledger Loop
 
-### Section 6 — Must-Have Requirements (100% Complete)
-* **Role-Based Access Control (5 Strict Portals):** `SALESMAN` (`/salesman/*`), `FACTORY_ADMIN` (`/admin/*`), `PRODUCTION_SUPERVISOR` (`/production/*`), `AUDITOR` (`/auditor/*`, read-only), and `OWNER` (`/dashboard`). Each role is strictly isolated to its portal.
-* **Dynamic Masters (`/admin/masters`):** Company GST profile, Items (`KG`, `GRAM`, `LITRE`, `ML`, `PIECE`, `PACKET`, `CARTON` with whole-number enforcement on discrete units), Customers + custom `CustomerPrice` tiers, Suppliers, and Staff Users.
-* **Mobile-First Field Salesman Portal (`/salesman`):** Sub-60-second order booking, carton-to-packet unit conversion, customer-specific rates, live GST preview, order status tracking, and customer-wise sales totals.
-* **Order Verification & GST Billing (`/admin/orders`, `/admin/invoices`):** Real-time stock sufficiency alerts, editable qty/rate overrides logged to `AuditLog`, intra-state (`CGST+SGST`) & inter-state (`IGST`) tax splitting, FY-scoped sequential invoice numbers, A4 Tax Invoice PDFs, physical dispatch deduction, and Credit Note cancellations (restocking only dispatched quantities).
-* **BOM & Production Engine (`/production`, `/production/boms`, `/production/new-run`):** Multi-item BOM recipes with pack-size scaling (`Clone & Scale BOM`), 1-step or 2-step (`IN_PROGRESS` $\rightarrow$ `COMPLETED`) batch runs, automatic raw material/packaging FIFO consumption, finished goods receipt, and planned-vs-actual consumption & yield variance flags ($\pm 3\%$ default tolerance).
-* **Immutable Stock Ledger & Summary (`/admin/adjustments`, `/auditor/stock-ledger`):** Append-only `StockLedger` reconciled 100% against `StockBatch` lots (`Opening + Inward - Outward = Closing`), plus expiry alerts (`<= 15 days`) and audited manual stock adjustments.
-* **Monthly Statutory Reports (`/auditor/*`):** Sales Register (Invoice/Customer/Product), GSTR-1/3B GST Summary (including Table 9B Credit Notes), Purchase Register, Stock Summary & Ledger, Production Variance & Costing, Payments & Receivables Ageing, and Audit Trail—exportable to **Excel (`.xlsx`)**, **CSV**, and **PDF**.
+Before seeing technical specs, picture a typical Tuesday at **Nittin Foods Pvt. Ltd.** in Tiruchirappalli, Tamil Nadu—and how each portal moves the business forward without spreadsheets or double-entry:
 
-### Section 6 — Should-Have Requirements (100% Complete)
-* **Inward Procurement & Vendor Bills (`/admin/purchases`):** Multi-line supplier bills, batch/expiry tracking, and supplier payments.
-* **Customer Payments & Ageing (`/admin/payments`, `/auditor/receivables`):** Invoice-specific or FIFO auto-allocated customer receipts, printable Receipt Vouchers, and `0–30 / 31–60 / 61–90 / 90+` day ageing buckets (net of credit notes).
-* **FIFO Valuation & Unit Costing:** Oldest-batch FIFO consumption + Direct Labour and Power/Gas overheads allocated over **actual good packets produced**.
-* **Owner Executive Dashboard (`/dashboard`):** Daily commercial pulse, finished stock vs. pending pipeline orders, latest unit economics/margin, variance watchlist, low-stock/expiry alerts, and top customer dues.
+1. **Dawn at the Factory Gate (`Production Supervisor` — Varshan):**
+   A truck arrives from *Cauvery Flour & Agro Mills* with 60 kg of Rice & Besan Flour. Varshan doesn't see supplier pricing or tax rates; he opens **1. Gate Receipt (GRN)** (`/production/receiving`) on his floor tablet, logs `60 kg` + challan `#` + batch expiry date, and saves `GRN/2026-27/0001` as `PENDING_BILLING`.
 
-### Section 6 — Stretch Goals & Phase 6 Hardening Implemented
-* **Offline Field Order Capture & Auto-Sync:** Client-side queue with idempotent `clientRequestId` UUIDs and automatic sync on reconnect.
-* **Batch & Expiry Tracking with FEFO Dispatch:** Batch lots with best-before tracking and First-Expiry-First-Out dispatch ordering.
-* **Reorder Level & Low-Stock Alerts:** Reorder thresholds highlighted on Admin Command Center, Adjustments, and Owner Dashboard.
-* **Production Requirement Planner:** Aggregates pending/`ON_HOLD` orders against finished stock to recommend exact batch runs on `/production`.
-* **Tally Prime XML / Excel Export & Mocked NIC e-Invoice (IRN/QR) / e-Way Bill JSON Export.**
-* **WhatsApp Invoice Sharing (`wa.me` pre-filled summary).**
-* **Partial Dispatch & Delivery Challan PDFs (`/admin/invoices`):** Split-trip FEFO dispatch (`PARTIALLY_DISPATCHED` $\rightarrow$ `DISPATCHED`) with `CH/YY-YY/NNNN` Delivery Challan PDFs.
-* **Sales Returns & Credit Note PDFs (`/admin/invoices`):** Partial line-level returns on dispatched invoices routing `RESALEABLE` returns back into `StockBatch` and keeping `DAMAGED` scrap out of sellable stock, with printable Credit Note PDFs.
-* **Supervisor Goods Receipt Note (GRN) with Admin Billing Verification (`/production/receiving` $\rightarrow$ `/admin/purchases`):** Floor Supervisor logs physical gate deliveries (`GRN/YY-YY/NNNN`) without vendor pricing access; Admin verifies rates & GST to inward into FIFO batches.
-* **Security & Auth Hardening:** Password show/hide toggle, self-service **Forgot Password** queue resolved via Admin temporary password reset (`mustChangePassword` prompt + session revocation via `tokenVersion`), sliding-window rate limiting on login/reset endpoints, customer credit-limit warnings, accessible React confirmation modals, pagination, and custom `error.tsx`/`not-found.tsx` boundaries.
+2. **Morning Billing Verification (`Factory Admin` — Samyuktha):**
+   On her desktop **Command Center** (`/admin`), Samyuktha sees the pending gate delivery in the **Supply & Stock Flow** pipeline. She opens **Purchases & GRNs** (`/admin/purchases`), clicks **Verify & Bill GRN**, enters the vendor bill rate (`₹45/kg`, `5% GST`), and saves—atomically crediting a dated `StockBatch` and `StockLedger` row (`PURCHASE_RECEIPT`) while recording Input GST credit.
 
-### Remaining / Not Implemented (Known Gaps)
-* **Stretch items from `PS.md` not implemented:** GPS salesman route check-in and Tamil UI translation for floor staff (English UI used across all roles).
-* **External Production Integrations:** Live NIC/GSP API credentials (currently mocked IRN/QR & e-Way Bill JSON) and official GSTN offline-tool JSON export schema.
-* **Secondary Workflows Deferred:** Supplier Purchase Returns (Debit Notes), explicit Batch Quarantine hold toggle on batches, server-side cursor pagination beyond 20-row client paging, Redis-backed multi-node rate limiting, and Playwright E2E browser tests against a live test PostgreSQL instance.
+3. **Mid-Morning Kitchen Run (`Production Supervisor` — Varshan):**
+   The Order Planner on `/production` warns that pending retailer/distributor demand exceeds the 50 finished packets in warehouse stock. Varshan opens **2. Batch Runs** (`/production/new-run`), selects *Standard Murukku 200 g Recipe*, and runs a batch:
+   - Flour issues `40 kg` from the oldest opening lot (`₹42/kg` via FIFO, leaving the `₹45/kg` lot untouched for later).
+   - Oil overshoots slightly (`10.5 L` vs `10.0 L` planned $\rightarrow$ **`+5.00%` alert**).
+   - Actual good yield is `188` packets instead of `200` (`-6.00%` alert), with `6` damaged pouches (`SCRAP_DAMAGE`) and `9` outer cartons consumed.
+   - Labour (`₹1,200`) + Power/Gas (`₹600`) bring total batch cost to `₹5,810.00`. Divided over `188` marketable packets = **`₹30.90 / packet`** (**`38.2%` margin** vs `₹50` selling price). Warehouse finished stock is now `50 + 188 = 238 packets`.
+
+4. **Afternoon Field Sales (`Salesman A` — Raja & `Salesman B` — Karthik):**
+   - **Raja** visits *Retailer A* in Thanjavur (Tamil Nadu, code `33`), opens `/salesman/new-order` on his mobile phone—even in low-signal basements where the app saves orders offline to IndexedDB with an idempotent UUID and auto-syncs on 3G/4G—and books **`150 packets`** (`₹7,500 + 2.5% CGST + 2.5% SGST = ₹7,875.00`).
+   - **Karthik** visits *Distributor B* in Bengaluru (Karnataka, code `29`) and books **`120 packets`** (`5% IGST`).
+
+5. **Order Approval, Dispatch & Collections (`Factory Admin` — Samyuktha):**
+   - Samyuktha verifies *Retailer A*'s order (`238 available >= 150`), clicks **Approve & Raise GST Invoice**, opens **Invoices & Dispatch** (`/admin/invoices`), downloads the A4 GST Tax Invoice PDF, and dispatches `150` packets via a Delivery Challan PDF—dropping finished stock to `88 packets`.
+   - When she inspects *Distributor B*'s order (`120` ordered vs `88` available), the system flags **`Shortage of 32 packets`**—so she puts it **`ON_HOLD`** until the next batch completes.
+   - *Retailer A* transfers `₹4,000` via UPI; Samyuktha logs it under **Payment Collections** (`/admin/payments`), dropping open dues to **`₹3,875.00`**.
+
+6. **Compliance & Executive Control Tower (`Auditor` — Sarathi CA & `Owner` — Rohith):**
+   - **Sarathi CA** logs into the strictly read-only **Auditor Report Center** (`/auditor`), checks reconciled stock (`Opening + Inward - Outward = Closing`), GSTR-1/3B summaries, ageing buckets, and downloads Excel, PDF, and **Tally Prime XML** vouchers.
+   - **Rohith (Business Owner)** opens the **Control Tower** (`/dashboard`, `/dashboard/reports`, `/dashboard/audit`, `/dashboard/team`) to monitor the live 5-stage operations pipeline, monthly/yearly Sales vs. Purchases trends, unit margins, expiry warnings, factory admin governance, and company-wide audit trails in 30 seconds.
 
 ---
 
-## Quick Setup & Deployment
+## Tech Stack & Engineering Highlights
+
+* **Full-Stack Framework:** **Next.js 15.5+ (App Router, Server Actions, TypeScript)** + **Tailwind CSS v4** + **PostgreSQL 16 (Neon Serverless / Docker Postgres)** with **Prisma ORM**.
+* **Zero-Float Financial & Stock Math:** Server-side `decimal.js` / `Prisma.Decimal` (`Decimal(12, 2)` currency, `Decimal(12, 3)` quantities) inside atomic `prisma.$transaction` blocks with `SELECT ... FOR UPDATE` row-level locks on FIFO/FEFO batch deductions.
+* **Resilient Workflow UX:**
+  * Collapsible, loop-grouped sidebar (`AppShell`) + interactive `<WorkflowPipeline />` strips and `<SetupChecklist />` onboarding tracker across portals.
+  * Sleek theme-aware custom scrollbars (`Light` warm ivory `#FAF6EE` / `Dark` espresso `#16100C`).
+  * Offline-ready Salesman order queue (`IndexedDB` + `localStorage` fallback) with `navigator.onLine` navigation protection so offline users never hit failed route transitions.
+  * Server error sanitization (`src/lib/errors.ts`) + global `error.tsx` so raw Prisma/SQL internals never reach users, paired with automatic transient Neon/DB retry (`withDbRetry`) and `ERR_TOO_MANY_REDIRECTS`-proof logout cleanup (`/api/auth/logout`).
+* **Security & Governance Hierarchy:**
+  * Top-level **`OWNER`** role bootstrapped strictly from environment variables (`BOOTSTRAP_OWNER_*`), managing **`FACTORY_ADMIN`** & **`AUDITOR`** accounts and **Company Legal/GST Profile** (`/dashboard/team`), with Owner password changes/resets disabled inside the UI/actions to prevent post-deployment lockouts.
+  * `jose` HS256 JWT `HttpOnly` cookies at Edge Middleware + `React.cache`-deduplicated PostgreSQL `User.active` / `tokenVersion` checks, `bcryptjs` hashing, brute-force account lockout, sliding-window rate limiting, CWE-1236 spreadsheet sanitization, strict security headers + `poweredByHeader: false`, and `robots.txt` + `noindex` privacy across all authenticated portals.
+* **Exports:** `jsPDF` + `jspdf-autotable` (A4 Tax Invoices, Delivery Challans, Credit Notes, Payment Receipts, Auditor PDFs with company logo), `xlsx` (Excel/CSV), **Tally Prime XML**, and **Mocked NIC e-Invoice (IRN/QR) & e-Way Bill JSON**.
+
+---
+
+## Governance & 5 Strict Portals
+
+| Role | Portal Routes | Core Responsibilities |
+| :--- | :--- | :--- |
+| **`OWNER`** | `/dashboard`, `/dashboard/reports`, `/dashboard/audit`, `/dashboard/team` | Executive overview, monthly/yearly visual analytics, company-wide audit trail, Company GST settings, and Factory Admin/Auditor lifecycle management. |
+| **`FACTORY_ADMIN`** | `/admin`, `/admin/orders`, `/admin/invoices`, `/admin/payments`, `/admin/purchases`, `/admin/adjustments`, `/admin/boms`, `/admin/masters` | Order approval/holds, GST invoicing, partial/full dispatch, sales returns & credit notes, GRN billing verification (raw/packaging only), customer/supplier payments, stock adjustments, read-only BOM view, and operational masters/staff. |
+| **`PRODUCTION_SUPERVISOR`** | `/production`, `/production/receiving`, `/production/new-run`, `/production/boms` | Floor gate GRN intake (blind to vendor rates), BOM recipes & Clone/Scale builder, 1-step or 2-step batch runs with live ±3% variance & unit costing. |
+| **`SALESMAN`** | `/salesman`, `/salesman/new-order`, `/salesman/orders` | Mobile-first sub-60s order booking (carton/packet conversion, customer pricing, offline IndexedDB auto-sync) & customer sales totals. |
+| **`AUDITOR`** | `/auditor`, `/auditor/sales-register`, `/auditor/gst-summary`, `/auditor/purchase-register`, `/auditor/stock-ledger`, `/auditor/production-report`, `/auditor/receivables`, `/auditor/audit-log` | Strictly read-only statutory registers, GSTR-1/3B breakdown, reconciled stock summary, debtor ageing, audit diff viewer, and Excel/CSV/PDF/Tally XML exports. |
+
+---
+
+## Setup & Deployment Guide
+
+> **Important:** Always connect **Demo** and **Production** to **separate PostgreSQL databases** (e.g., separate Neon branches). Never run Demo seed/reset against your Production database.
 
 ### 1. Environment Variables
 ```powershell
 cp .env.example .env
 ```
-Configure `DATABASE_URL` (Neon Serverless or local PostgreSQL) and `SESSION_SECRET` (32+ chars). Keep `ENABLE_DEMO_MODE="false"` in production.
+Configure at minimum:
+* `DATABASE_URL` — PostgreSQL connection string (Neon `sslmode=require` or local Postgres)
+* `SESSION_SECRET` — Random secret (32+ characters)
+* `ENABLE_DEMO_MODE` — `"false"` for Production, `"true"` for Demo/Evaluation
+* `BOOTSTRAP_OWNER_EMAIL`, `BOOTSTRAP_OWNER_PASSWORD`, `BOOTSTRAP_OWNER_NAME` — Required to bootstrap the top-level **Owner** account (`npm run db:setup:prod`). Optionally set `BOOTSTRAP_ADMIN_*` to also pre-create an initial Factory Admin.
 
-### 2. Local Evaluation vs. Production Setup
+### 2. Local Setup: Production vs. Benchmark Demo
 
-> **Important:** Always keep **Demo** and **Production** pointed at **separate PostgreSQL databases** (e.g., separate Neon branches). Never run Demo seed/reset against your Production database.
+* **Option A — Clean Production Setup (Local):**
+  ```powershell
+  npm install
+  # Keep ENABLE_DEMO_MODE="false" in .env
+  npm run db:setup:prod
+  npm run dev
+  ```
+  *Seeds zero dummy transactions—only creates the top-level Owner (and optional Admin) so you can configure GST profile, Factory Admins, Items, Suppliers, and Customers cleanly.*
 
-**Option A — Clean Production Mode (Local):**
-```powershell
-npm install
-# Keep ENABLE_DEMO_MODE="false" in .env
-npm run db:setup:prod
-npm run dev
-```
-*Creates the top-level `OWNER` account (`BOOTSTRAP_OWNER_*`) and optionally an initial `FACTORY_ADMIN` (`BOOTSTRAP_ADMIN_*`)—zero demo records. The Owner can create and manage Factory Admins & Auditors anytime under **Admins & Company** (`/dashboard/team`).*
+* **Option B — Benchmark Demo Setup (Local Evaluation):**
+  ```powershell
+  npm install
+  # Set ENABLE_DEMO_MODE="true" in .env pointing to your isolated Demo DB
+  npm run db:setup:demo
+  npm run dev
+  ```
+  *Seeds the complete Section 5 dataset—including realistic shelf-life `expiryDate` lots and a settled opening supplier bill (`PUR/2026-27/0000` / `GRN/2026-27/0000` via `Cauvery Flour & Agro Mills`) so Purchase Register, Input GST, Expiry Watchlist, and Stock Ledger are realistic from second zero.*
 
-**Option B — Benchmark Demo Mode (Local Evaluation):**
-```powershell
-npm install
-# Set ENABLE_DEMO_MODE="true" in .env (pointing to an isolated demo DB)
-npm run db:setup:demo
-npm run dev
-```
-*(Or click **"Load / Reset Benchmark Data"** directly on `/login` once `ENABLE_DEMO_MODE="true"` is set.)*
+  *To wipe and replay the Demo DB anytime during testing, click **"Load / Reset Benchmark Data"** on `/login` (when `ENABLE_DEMO_MODE="true"`) or re-run `npm run db:seed:demo`.*
 
 ### 3. Single-Command Docker Compose (Turnkey Demo & Prod)
-* **Demo Mode (Recommended for Evaluators — auto-seeds Section 5 Benchmark into an isolated `nittin_erp_demo` DB):**
+* **Demo Mode (Auto-seeds isolated `nittin_erp_demo` PostgreSQL container):**
   ```powershell
   docker compose -f docker-compose.yml -f docker-compose.demo.yml up --build
   ```
-* **Production Mode (`ENABLE_DEMO_MODE=false`, bootstraps only Admin into `nittin_erp` DB):**
+* **Production Mode (`ENABLE_DEMO_MODE=false`, bootstraps Owner into `nittin_erp` DB):**
   ```powershell
   docker compose up --build
   ```
 
 ### 4. Hosted Deployment (Vercel + Neon)
-Deploy two separate Vercel projects (or Preview vs. Production environments) pointing to two separate Neon branches:
-* **Demo Deployment:** `ENABLE_DEMO_MODE="true"` + Neon `demo` branch.
-* **Production Deployment:** `ENABLE_DEMO_MODE="false"` + Neon `production` branch.
+1. Create two Neon branches: `production` and (optionally) `demo`.
+2. Push schema & indexes to your target DB:
+   ```powershell
+   npx prisma db push
+   ```
+3. In Vercel Environment Variables, set `DATABASE_URL`, `SESSION_SECRET`, `NEXT_PUBLIC_APP_URL` (your deployed `https://...` domain), `ENABLE_DEMO_MODE="false"`, and `BOOTSTRAP_OWNER_*`.
+4. Bootstrap the Owner once against Production (`npm run db:seed`), deploy (`vercel --prod`), sign in as **Owner** at `/login`, configure Company GST & Factory Admins under `/dashboard/team`, and let operations begin!
 
-### 5. Run Verification Checks
+### 5. Automated Verification Suite
 ```powershell
+npx prisma validate
 npm run typecheck
 npm test
 npm run lint
+npm run build
 ```
 
 ---
 
-## How to Navigate & Test the Section 5 Benchmark Demo
+## Step-by-Step Benchmark Testing Guide (`Section 5`)
 
-Ensure `ENABLE_DEMO_MODE="true"` in `.env` and start the app (`npm run dev`), then open `http://localhost:3000/login`:
+Ensure `ENABLE_DEMO_MODE="true"`, start the app (`npm run dev`), and open `http://localhost:3000/login`:
 
-1. **Load Benchmark Master Data:**
-   * On `/login`, click **"Load / Reset Benchmark Data"** (confirm the dialog) to reset the DB cleanly to the exact Section 5 opening state (100 kg Flour @ ₹42, 30 L Oil @ ₹140, 5 kg Spice @ ₹200, 500 Pouches @ ₹2.50, 30 Cartons @ ₹15, 50 pkts Murukku 200 g, selling price ₹50 + 5% GST, TN factory).
-   * Use the **Demo Access** buttons on `/login` (or sign out and switch roles anytime; demo password is `DEMO_USER_PASSWORD` or `DemoPass@123`).
+1. **Reset to Clean Opening Benchmark State:**
+   * On `/login`, click **"Load / Reset Benchmark Data"** and confirm.
+   * Opening lots created cleanly:
+     * **Raw & Packaging (via `PUR/2026-27/0000` & `GRN/2026-27/0000` from *Cauvery Flour & Agro Mills*):** 100 kg Flour @ ₹42 (`+90d` expiry), 30 L Cooking Oil @ ₹140 (`+180d` expiry), 5 kg Spice Mix @ ₹200 (`+240d` expiry), 500 Pouches @ ₹2.50, 30 Cartons @ ₹15.
+     * **Finished Goods (`OPENING_BALANCE`):** 50 pkts *Murukku 200 g* (`BATCH-OPEN-MURUKKU`, `+45d` expiry, selling price ₹50 + 5% GST).
+     * **Demo Password:** `DemoPass@123` (or `DEMO_USER_PASSWORD`), with 1-click role switcher buttons on `/login`.
 
-2. **Step 1 — Record Flour Purchase (`Factory Admin`):**
-   * Click **Factory Admin (Desktop)** $\rightarrow$ open **Purchases** (`/admin/purchases`) $\rightarrow$ click **+ Record Inward Purchase**.
-   * Select Supplier, enter a Bill # and today's date, choose **Flour**, quantity `60` `KG`, rate `45`, GST `5` $\rightarrow$ save.
-   * *(Optional GRN test: You can alternatively log a delivery as **Floor Supervisor** under **Goods Receipt (GRN)** `/production/receiving` and click **Verify & Bill GRN** under Admin Purchases.)*
+2. **Step 1 — Inward Flour Purchase (`Factory Admin`):**
+   * Sign in as **Factory Admin** $\rightarrow$ open **Purchases & GRNs** (`/admin/purchases`) $\rightarrow$ click **+ Record Inward Purchase** (note: finished goods are excluded from procurement).
+   * Select *Cauvery Flour & Agro Mills*, enter Bill # & date, choose **Rice & Besan Flour**, Qty `60` `KG`, Rate `45`, GST `5%`, optional expiry date $\rightarrow$ save.
+   * *(Alternatively, test the 2-step gate flow by logging a delivery as Floor Supervisor under `/production/receiving` first and clicking **Verify & Bill GRN** in `/admin/purchases`.)*
 
 3. **Steps 2, 3 & 8 — Run Murukku Batch with Variance & Overheads (`Floor Supervisor`):**
-   * Sign out $\rightarrow$ click **Floor Supervisor** on `/login` $\rightarrow$ go to **New Batch Run** (`/production/new-run`).
-   * Choose **Standard Murukku 200 g Recipe** (`batchMultiplier = 1`).
-   * Set Actual Issued quantities: Flour `40` kg, Cooking Oil `10.5` L (observe live `+5.00%` red variance alert), Spice Mix `1.2` kg.
-   * Enter Output & Scrap: Good Packets `188` (observe live `-6.00%` red yield alert), Damaged Pouches `6`, Cartons Used `9`.
-   * Enter Overheads: Labour `1200`, Power/Gas `600`. Observe live **Total Batch Cost `₹5,810.00`**, **Cost/Packet `₹30.90`**, **Gross Margin `38.2%`**.
-   * Click **Save & Commit Production Run**.
+   * Switch to **Production Supervisor** $\rightarrow$ open **2. Batch Runs** (`/production/new-run`).
+   * Select *Standard Murukku 200 g Recipe* (`Multiplier = 1`).
+   * Enter Actual Issued: Flour `40` kg, Cooking Oil `10.5` L (observe **`+5.00%`** variance alert), Spice Mix `1.2` kg.
+   * Enter Output & Scrap: Good Packets `188` (observe **`-6.00%`** yield alert), Damaged Pouches `6`, Cartons Used `9`.
+   * Enter Overheads: Labour `1200`, Power/Gas `600`.
+   * Verify live preview shows **Total Batch Cost `₹5,810.00`**, **Cost/Packet `₹30.90`**, **Gross Margin `38.2%`** $\rightarrow$ **Save & Commit Production Run**.
 
-4. **Step 4 — Place Order for Retailer A (`Salesman A`):**
-   * Sign out $\rightarrow$ click **Salesman A (Mobile)** $\rightarrow$ tap **New Order** (`/salesman/new-order`).
-   * Select **Retailer A (Tamil Nadu)**, set **Murukku 200 g** to `150` `PACKET`, and submit.
+4. **Step 4 — Field Order Booking & Offline Queue Check (`Salesman A`):**
+   * Switch to **Salesman A (Mobile)** $\rightarrow$ tap **1. New Field Order** (`/salesman/new-order`).
+   * *(Optional Offline Check: toggle Chrome DevTools Network to `Offline`, submit an order, confirm it saves to the offline banner queue right on `/salesman/new-order` without losing the page, then switch back to `Online` to watch it auto-sync idempotently.)*
+   * Select **Retailer A (Tamil Nadu — `33`)**, set *Murukku 200 g* to `150` `PACKET`, and submit.
 
-5. **Step 5 — Approve, Raise GST Invoice & Dispatch (`Factory Admin`):**
-   * Sign out $\rightarrow$ click **Factory Admin (Desktop)** $\rightarrow$ go to **Incoming Orders** (`/admin/orders`) $\rightarrow$ click **Verify & Process** on Retailer A's order.
-   * Verify stock shows **238 PACKET available** (Sufficient) $\rightarrow$ click **Approve & Raise GST Invoice**.
-   * Go to **Invoices & Dispatch** (`/admin/invoices`) $\rightarrow$ download the A4 **PDF** invoice (`₹7,500 + ₹187.50 CGST + ₹187.50 SGST = ₹7,875.00`), then click **Dispatch** $\rightarrow$ confirm dispatch (`150` packets) to deduct stock to **88 packets** and download the Delivery Challan PDF.
+5. **Step 5 — Order Verification, GST Invoicing & Dispatch (`Factory Admin`):**
+   * Switch to **Factory Admin** $\rightarrow$ **1. Incoming Orders** (`/admin/orders`) $\rightarrow$ **Verify & Process** Retailer A's order.
+   * Confirm warehouse shows **`238 PACKET available`** (Sufficient) $\rightarrow$ click **Approve & Raise GST Invoice**, then click **"Open Dispatch →"** in the toast (or open `/admin/invoices`).
+   * Download the A4 Tax Invoice PDF (`₹7,500 + ₹187.50 CGST + ₹187.50 SGST = ₹7,875.00`), click **Dispatch** (`150` pkts) to reduce warehouse stock to **`88 packets`**, and download the Delivery Challan PDF.
 
-6. **Step 6 — Shortage Order & IGST Check (`Salesman B` $\rightarrow$ `Factory Admin`):**
-   * Switch to **Salesman B (Interstate)** $\rightarrow$ submit an order for **Distributor B (Karnataka)** for `120` packets.
-   * Switch to **Factory Admin** $\rightarrow$ **Incoming Orders** $\rightarrow$ **Verify & Process** Distributor B's order: observe the red alert **Shortage of 32 PACKET** (`88` available vs `120` ordered) and **5% IGST** preview $\rightarrow$ click **Place On Hold** (or check Production Planner on `/production` suggesting `1 batch`).
+6. **Step 6 — Shortage Hold & Inter-State IGST (`Salesman B` $\rightarrow$ `Factory Admin`):**
+   * Switch to **Salesman B (Interstate)** $\rightarrow$ submit an order for **Distributor B (Karnataka — `29`)** for `120` `PACKET`.
+   * Switch to **Factory Admin** $\rightarrow$ **Verify & Process** Distributor B's order: confirm red alert **`Shortage of 32 PACKET`** (`88` available vs `120` ordered) and **`5% IGST`** preview (`₹300.00`) $\rightarrow$ click **Place On Hold**. *(Checking `/production` now recommends **1 batch** to cover the `32`-packet deficit.)*
 
-7. **Step 7 — Record Customer Payment (`Factory Admin`):**
-   * Open **Payments** (`/admin/payments`) $\rightarrow$ click **+ Record Customer Payment** for **Retailer A** for `4000` (e.g. UPI) $\rightarrow$ save and verify Retailer A's outstanding balance becomes **`₹3,875.00`**. Download the Receipt Voucher PDF.
+7. **Step 7 — Payment Collection (`Factory Admin`):**
+   * Open **3. Payment Collections** (`/admin/payments`) $\rightarrow$ **+ Record Customer Payment** for **Retailer A** for `4000` (UPI) $\rightarrow$ save.
+   * Confirm Retailer A's open balance updates to **`₹3,875.00`** and download the Payment Receipt Voucher PDF.
 
-8. **Step 9 — Verify Reports & Executive Dashboard (`Auditor` & `Owner`):**
-   * Switch to **Auditor (Read-Only)** $\rightarrow$ open **Report Center** (`/auditor`) and inspect **Sales Register**, **GST Summary**, **Purchase Register**, **Stock Ledger** (`Ledger Reconciled`), **Production Report**, **Receivables**, and **Audit Trail**; test Excel, CSV, PDF, and Tally XML downloads.
-   * Switch to **Business Owner** (`/dashboard`) to view the executive pulse, unit economics (`₹30.90/pkt`), variance alerts, and `₹3,875.00` receivable balance.
+8. **Step 9 — Audit Verification & Owner Analytics (`Auditor` & `Owner`):**
+   * Switch to **Auditor (Read-Only)** (`/auditor`) $\rightarrow$ inspect **Sales Register**, **GST Summary**, **Purchase Register**, **Stock Ledger** (`Ledger Reconciled`), **Production Report**, **Receivables**, and **Audit Trail**; test `.xlsx`, `.csv`, `.pdf`, and **Tally XML** exports.
+   * Switch to **Business Owner** (`/dashboard`) $\rightarrow$ inspect the Executive Control Tower, open **Analytics & Reports** (`/dashboard/reports`) for Monthly/Yearly charts & stock valuation splits, and review **Audit Trail** (`/dashboard/audit`).
 
 ---
 
 ## Section 5 Benchmark Verification Summary
 
-| Check | Expected (`PS.md`) | Verified Engine Output |
+| Check | Expected (`docs/PS.md`) | Verified Engine Output |
 | :--- | :--- | :--- |
 | Flour closing balance | `120 kg` (`100 + 60 - 40`) | `120.000 kg` (FIFO: 60 kg @ ₹42 + 60 kg @ ₹45) |
 | Cooking oil closing balance | `19.5 L` | `19.500 L` |
@@ -163,13 +194,19 @@ Ensure `ENABLE_DEMO_MODE="true"` in `.env` and start the app (`npm run dev`), th
 
 ---
 
+## Known Boundaries (Non-Benchmark / Future Extensions)
+* **External Govt APIs:** NIC e-Invoice (IRN/QR) & e-Way Bill payloads are deterministic compliant JSON mocks rather than live GSTN/GSP API calls.
+* **Deferred Stretch Modules:** GPS salesman check-in tracking, Tamil floor localization, Supplier Debit Notes (Purchase Returns), and multi-factory tenant isolation are scoped for v2.
+
+---
+
 ## Documentation Index
 
 * [docs/PS.md](docs/PS.md) — Original Problem Statement
-* [docs/DESIGN_NOTE.md](docs/DESIGN_NOTE.md) — Executive 2-Page Design Note
-* [docs/DATABASE.md](docs/DATABASE.md) — Relational Schema & Ledger Invariants
-* [docs/BUSINESS_LOGIC.md](docs/BUSINESS_LOGIC.md) — FIFO, BOM Variance, Costing & GST Math
+* [docs/DESIGN_NOTE.md](docs/DESIGN_NOTE.md) — Executive Design Note
+* [docs/DATABASE.md](docs/DATABASE.md) — Relational Schema, Indexes & Ledger Invariants
+* [docs/BUSINESS_LOGIC.md](docs/BUSINESS_LOGIC.md) — FIFO/FEFO, BOM Variance, Costing & GST Math
 * [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — Multi-Tier Architecture & Stack Rationale
 * [docs/SECURITY.md](docs/SECURITY.md) — OWASP Threat Model, RBAC Matrix & Hardening
-* [docs/UI_UX_DESIGN.md](docs/UI_UX_DESIGN.md) — Warm Brand Theme, Dark Mode & Screen Specs
+* [docs/UI_UX_DESIGN.md](docs/UI_UX_DESIGN.md) — Theme System, Collapsible Shell & Screen Specs
 * [docs/PAGES_AND_FEATURES.md](docs/PAGES_AND_FEATURES.md) — Complete Route & Feature Map

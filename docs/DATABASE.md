@@ -442,12 +442,12 @@ GROUP BY i.id, i.code;
 
 ---
 
-## 6. Benchmark Seed Script Architecture (`prisma/seed.ts`)
+## 6. Seed Architecture & Hot-Path Database Indexes
 
-The database architecture features an automated seed script that loads the exact Section 5 benchmark data:
-1. **Cleans database tables** in reverse foreign-key order.
-2. **Seeds 5 Roles:** Salesman A, Salesman B, Factory Admin, Floor Supervisor, Auditor, Owner.
-3. **Seeds Customers:** Retailer A (Tamil Nadu, state code `33`), Distributor B (Karnataka, state code `29`).
-4. **Seeds Items:** Flour, Cooking Oil, Spice Mix, 200g Pouch, Outer Carton, Finished Murukku 200g.
-5. **Seeds BOM Recipe:** Murukku 200g standard recipe (40kg flour, 10L oil, 1.2kg spices, 200 pouches, 10 cartons $\rightarrow$ 200 packets yield).
-6. **Seeds Opening Inventory in `StockLedger`:** 100 kg flour, 30 L oil, 5 kg spices, 500 pouches, 30 cartons, 50 packets Murukku 200g.
+* **Production Bootstrap (`prisma/seed.ts`):** Seeds strictly zero operational demo rows—creating only the top-level `OWNER` (`BOOTSTRAP_OWNER_*`) and optional initial `FACTORY_ADMIN` (`BOOTSTRAP_ADMIN_*`) alongside empty `CompanySettings` (`isConfigured: false`).
+* **Benchmark Demo Seeder (`prisma/seed-demo.ts` $\rightarrow$ `src/lib/demo-seed.ts`):** Triggered in isolated demo environments (`ENABLE_DEMO_MODE=true`):
+  1. **Cleans database tables** in reverse foreign-key order.
+  2. **Seeds All 5 Roles:** Salesman A, Salesman B, Factory Admin, Floor Supervisor, Auditor, Business Owner.
+  3. **Seeds Masters:** Retailer A (TN `33`), Distributor B (KA `29`), Cauvery Flour & Agro Mills (TN `33`), Items, and Standard Murukku 200 g BOM.
+  4. **Seeds Realistic Opening Inward Purchase & Expiry Lots:** Records initial raw/packaging lots via a settled inward supplier bill (`PUR/2026-27/0000`, `GRN/2026-27/0000` `VERIFIED`, `SupplierPayment` `BANK_TRANSFER`, `PURCHASE_RECEIPT` ledger entries with `expiryDate` `+90d`/`+180d`/`+240d`), plus `BATCH-OPEN-MURUKKU` (`OPENING_BALANCE`, `50 pkts`, `+45d` expiry).
+* **Hot-Path Performance Indexes (`prisma/schema.prisma`):** Indexed filter/sort paths include `User[role, active]`, `Customer[active, assignedSalesmanId]`, `Item[active, category]`, `Purchase[purchaseDate]`, `Payment[paymentDate]`, `ProductionRun[status, runDate]`, `Invoice[status, dispatchStatus]` & `[status, paymentStatus]`, `StockBatch[remainingQty]` & `[expiryDate]`, and `AuditLog[userId, createdAt]`.

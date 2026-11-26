@@ -59,7 +59,7 @@
 
 * **Mobile (`< 768px`):** Single-column layout, `16px` horizontal padding, sticky `56px` top bar, bottom tab bar (`64px` fixed) for primary navigation + slide-out drawer for secondary pages, full-width primary buttons (`min-h-[44px]`), and **Data Tables automatically rendered as structured mobile cards**.
 * **Tablet (`768px – 1023px`):** Collapsible sidebar drawer, 2-column KPI/form grids, `44px` minimum touch targets for production floor tablets.
-* **Desktop (`>= 1024px`):** Persistent `240px` left sidebar (`#FFFFFF`, `1px` right border) + `56px` sticky top bar + `max-w-[1440px]` workspace container with multi-column data tables and side-by-side summary panels.
+* **Desktop (`>= 1024px`):** Collapsible ChatGPT-style left sidebar (`240px` expanded with loop-grouped headers $\leftrightarrow$ `72px` icon-only collapsed rail persisted in `localStorage`) + `56px` sticky top bar + `max-w-[1440px]` workspace container with custom theme-matched sleek scrollbars.
 
 ### 3.2 App Shell Anatomy
 
@@ -85,10 +85,10 @@
 | Role                      | Primary Nav Items                                                                                    | Mobile Bottom Tabs (max 4)                |
 | :------------------------ | :--------------------------------------------------------------------------------------------------- | :---------------------------------------- |
 | **Salesman**              | Home, New Order, Orders & Sales                                                                      | Home, `+ New Order`, Orders               |
-| **Factory Admin**         | Command Center, Orders, Invoices & Dispatch, Purchases, Payments, Stock Adjustments, Masters         | Overview, Orders, Invoices, More (Drawer) |
+| **Factory Admin**         | Command Center, Orders, Invoices & Dispatch, Payments, Purchases & GRNs, Stock & Adjustments, BOM Recipes, Masters & Staff | Overview, Orders, Invoices, More (Drawer) |
 | **Production Supervisor** | Floor Overview, New Batch Run, Goods Receipt (GRN), BOM Recipes                                      | Overview, `+ New Run`, GRN                |
 | **Auditor**               | Overview, Sales Register, GST Summary, Purchase Register, Stock Ledger, Production Report, Receivables, Audit Trail | Overview, Registers (Drawer), Stock, Dues |
-| **Owner**                 | Executive Dashboard (standalone KPIs, stock health, variance alerts, margins, receivables)           | Single clean mobile/desktop view          |
+| **Owner**                 | Executive Overview, Analytics & Reports, Audit Trail, Admins & Company                               | Overview, Analytics, Team                  |
 
 ---
 
@@ -96,7 +96,7 @@
 
 Every screen is built from the same core UI primitives:
 
-1. **`AppShell`**: Handles sidebar (with `nittin.png` emblem), mobile drawer, mobile bottom bar, top bar (`Online`/`Offline` badge + `ThemeToggle` Light/Dark switch), Change Password drawer, and forced temporary-password alert.
+1. **`AppShell`, `WorkflowPipeline` & `SetupChecklist`**: `AppShell` handles the collapsible loop-grouped sidebar (with `nittin.png` emblem), offline navigation guard (blocks dead page switches while `!online`), mobile drawer/bottom bar, top bar (`Online`/`Offline` badge + `ThemeToggle`), and Change Password drawer (hidden for `OWNER`). `WorkflowPipeline` and `SetupChecklist` provide clickable live queue strips and fresh-prod onboarding readiness across home views.
 2. **`PageHeader`**: Consistent page title, concise subtitle, optional financial year/date indicator, and right-aligned action group (Roasted Brown primary button + secondary outline buttons).
 3. **`StatCard`**: Label (`12px`), primary metric (`24px tabular-nums font-semibold`), and compact sub-note/trend pill. Strictly max 3 data points per card.
 4. **`StatusBadge`**: Standardized semantic pill (`Submitted`, `On Hold`, `Invoiced`, `Partial Dispatch`, `Dispatched`, `Paid`, `Pending Billing`, `Verified`, `Sales Return`, `Variance Flagged`).
@@ -147,14 +147,14 @@ Every screen is built from the same core UI primitives:
 ### 5.5 Auditor Portal (`/auditor/*`)
 
 * **Strictly read-only calm workspace:**
-    - Persistent **Report Filter Bar** at the top (From Date, To Date, Financial Year, Report Sub-Nav tabs) + unified Export Menu (`Excel .xlsx`, `CSV`, `PDF`, and `Tally XML / Excel`).
+    - Persistent **Report Filter Bar** (`AuditorFilterBar`: From Date, To Date, `Full FY`, Export Menu) with all module switching unified cleanly in the left sidebar (and clickable directory cards on `/auditor` Overview) without redundant horizontal tab duplication.
     - Clean high-density financial tables with right-aligned `tabular-nums`, sticky totals footer row, and a subtle green reconciliation badge (`Ledger Reconciled: ΣΔQ = Closing Balance`) on `/auditor/stock-ledger`.
 
-### 5.6 Owner Executive Dashboard (`/dashboard`)
+### 5.6 Owner Control Tower (`/dashboard`, `/dashboard/reports`, `/dashboard/audit`, `/dashboard/team`)
 
-* **30-second factory pulse (equally crisp on phone and laptop):**
-    - Top 4 KPI cards: `Today's Orders & Revenue`, `Finished Stock & Pending Orders`, `Unit Cost & Gross Margin`, `Total Receivables`.
-    - 2-column analytical section: **Active Variance & Wastage Alerts** (e.g. `PR-2024-001: Yield -6.00%, Oil +5.00%`) + **Low-Stock & Expiring Batch Watchlist** + **Top Customer Dues**.
+* **Executive Overview (`/dashboard`):** Onboarding checklist, 5-stage live Operations Pipeline, 4 executive KPI cards, consolidated variance/expiry alert, prioritized Stock Watchlist, Open Customer Dues, Recent Batch Costing, and 4-row Activity Preview.
+* **Analytics & Reports (`/dashboard/reports`):** Monthly (12M) & Yearly Sales vs. Purchases vs. Collections charts, Top Products/Customers mix bars, and FIFO inventory valuation breakdown.
+* **Audit Trail (`/dashboard/audit`) & Governance (`/dashboard/team`):** Searchable immutable activity viewer and Factory Admin / Company GST configuration.
 
 ---
 
