@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ItemCategory, UnitType } from "@prisma/client";
 import { toast } from "sonner";
@@ -9,6 +10,7 @@ import {
   toggleBomActiveAction,
   upsertBomAction,
 } from "@/actions/production.actions";
+import { InlineAlert } from "@/components/ui/InlineAlert";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SlideOverDrawer } from "@/components/ui/SlideOverDrawer";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -72,7 +74,13 @@ const inputCls =
   "h-10 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--brand-primary)]";
 const labelCls = "mb-1 block text-xs font-medium text-[var(--text-secondary)]";
 
-export function BomsWorkspace({ data }: { data: BomsPageData }) {
+export function BomsWorkspace({
+  data,
+  readOnly = false,
+}: {
+  data: BomsPageData;
+  readOnly?: boolean;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -202,16 +210,36 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
         title="BOM Recipes"
         subtitle="Standard batch ratios and pack-size scaling"
         actions={
-          <button
-            type="button"
-            disabled={data.finishedItems.length === 0 || data.ingredientItems.length === 0}
-            onClick={openCreateBom}
-            className="h-10 rounded-lg bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white hover:bg-[var(--brand-hover)] disabled:opacity-50"
-          >
-            + Create BOM Recipe
-          </button>
+          readOnly ? (
+            <Link
+              href="/admin/masters"
+              className="inline-flex h-10 items-center rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-4 text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--bg-subtle)]"
+            >
+              Add Finished Good SKU →
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled={data.finishedItems.length === 0 || data.ingredientItems.length === 0}
+              onClick={openCreateBom}
+              className="h-10 rounded-lg bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white hover:bg-[var(--brand-hover)] disabled:opacity-50"
+            >
+              + Create BOM Recipe
+            </button>
+          )
         }
       />
+
+      {readOnly ? (
+        <InlineAlert variant="info" title="Read-Only BOM Directory">
+          To create a recipe for a new snack or pack size, first add the{" "}
+          <strong>Finished Good</strong> item under{" "}
+          <Link href="/admin/masters" className="font-semibold underline">
+            Masters &amp; Staff → Items
+          </Link>
+          ; the Floor Supervisor can then configure its BOM recipe under Production.
+        </InlineAlert>
+      ) : null}
 
       {data.boms.length === 0 ? (
         <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-12 text-center">
@@ -279,53 +307,55 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
                     {formatINR(bom.estimatedBatchCost)}
                   </strong>
                 </span>
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={() => openCloneBom(bom)}
-                    className="text-xs font-medium text-[var(--accent-gold)] hover:underline"
-                  >
-                    Clone & Scale
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setBomForm({
-                        id: bom.id,
-                        finishedItemId: bom.finishedItemId,
-                        name: bom.name,
-                        batchSizeOutput: formatDisplayQty(
-                          bom.batchSizeOutput,
-                          bom.finishedUnit
-                        ),
-                        tolerancePercent: bom.tolerancePercent,
-                        items: bom.items.map((l) => ({
-                          itemId: l.itemId,
-                          standardQty: formatDisplayQty(l.standardQty, l.unit),
-                          unit: l.unit,
-                        })),
-                      });
-                      setBomOpen(true);
-                    }}
-                    className="text-xs font-medium text-[var(--brand-primary)] hover:underline"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      startTransition(async () => {
-                        const res = await toggleBomActiveAction(bom.id, !bom.active);
-                        if (res.ok) toast.success("BOM status updated.");
-                        else toast.error(res.error ?? "Update failed");
-                        router.refresh();
-                      })
-                    }
-                    className="text-xs font-medium text-[var(--text-muted)]"
-                  >
-                    {bom.active ? "Deactivate" : "Activate"}
-                  </button>
-                </div>
+                {!readOnly ? (
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => openCloneBom(bom)}
+                      className="text-xs font-medium text-[var(--accent-gold)] hover:underline"
+                    >
+                      Clone & Scale
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBomForm({
+                          id: bom.id,
+                          finishedItemId: bom.finishedItemId,
+                          name: bom.name,
+                          batchSizeOutput: formatDisplayQty(
+                            bom.batchSizeOutput,
+                            bom.finishedUnit
+                          ),
+                          tolerancePercent: bom.tolerancePercent,
+                          items: bom.items.map((l) => ({
+                            itemId: l.itemId,
+                            standardQty: formatDisplayQty(l.standardQty, l.unit),
+                            unit: l.unit,
+                          })),
+                        });
+                        setBomOpen(true);
+                      }}
+                      className="text-xs font-medium text-[var(--brand-primary)] hover:underline"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        startTransition(async () => {
+                          const res = await toggleBomActiveAction(bom.id, !bom.active);
+                          if (res.ok) toast.success("BOM status updated.");
+                          else toast.error(res.error ?? "Update failed");
+                          router.refresh();
+                        })
+                      }
+                      className="text-xs font-medium text-[var(--text-muted)]"
+                    >
+                      {bom.active ? "Deactivate" : "Activate"}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </div>
           ))}
@@ -340,7 +370,7 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
       >
         <form onSubmit={handleSaveBom} className="space-y-4">
           <div>
-            <label className={labelCls}>Finished Product</label>
+            <label className={labelCls}>Finished Product SKU</label>
             <select
               className={inputCls}
               required
@@ -355,6 +385,19 @@ export function BomsWorkspace({ data }: { data: BomsPageData }) {
                 </option>
               ))}
             </select>
+            <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+              Output stock from runs goes into this Finished Good SKU. Need a new product (e.g., Adhirasam 200 g)? Have Factory Admin add it under Masters → Items first.
+            </p>
+            {!bomForm.id &&
+            data.boms.some(
+              (b) => b.active && b.finishedItemId === bomForm.finishedItemId
+            ) ? (
+              <div className="mt-2">
+                <InlineAlert variant="warning">
+                  This SKU already has an active BOM. Only save if this is an alternate recipe for the exact same product—do not link a different snack here.
+                </InlineAlert>
+              </div>
+            ) : null}
           </div>
           <div>
             <label className={labelCls}>Recipe Name</label>

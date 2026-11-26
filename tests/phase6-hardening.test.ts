@@ -52,6 +52,9 @@ describe("Phase 6 Production Hardening, GRN, Partial Dispatch & Sales Returns", 
   it("allows Floor Supervisor access to GRN receiving without commercial admin access", () => {
     expect(canAccessPath("PRODUCTION_SUPERVISOR", "/production/receiving")).toBe(true);
     expect(canAccessPath("PRODUCTION_SUPERVISOR", "/admin/purchases")).toBe(false);
+    expect(canAccessPath("OWNER", "/dashboard")).toBe(true);
+    expect(canAccessPath("OWNER", "/dashboard/team")).toBe(true);
+    expect(canAccessPath("FACTORY_ADMIN", "/dashboard/team")).toBe(false);
 
     const uid = "22222222-2222-4222-8222-222222222222";
     const grnOk = createGoodsReceiptSchema.safeParse({

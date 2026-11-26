@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { OrderStatus, ProductionRunStatus } from "@prisma/client";
+import { GrnStatus, OrderStatus, ProductionRunStatus } from "@prisma/client";
 import {
   ProductionOverviewClient,
   type ProductionOverviewData,
@@ -28,6 +28,7 @@ export default async function ProductionOverviewPage() {
     recentRuns,
     pendingOrderItems,
     stockMap,
+    pendingGrnsCount,
   ] = await Promise.all([
     prisma.bOM.findMany({
       where: { active: true },
@@ -69,6 +70,7 @@ export default async function ProductionOverviewPage() {
       select: { itemId: true, quantity: true },
     }),
     getItemStockMap(prisma),
+    prisma.goodsReceipt.count({ where: { status: GrnStatus.PENDING_BILLING } }),
   ]);
 
   const recentVarianceAlerts = recentRuns
@@ -115,6 +117,7 @@ export default async function ProductionOverviewPage() {
       inProgressRuns: inProgressRuns.length,
       completedLast7Days,
       varianceAlerts24h: recentVarianceAlerts.length,
+      pendingGrns: pendingGrnsCount,
     },
     recentVarianceAlerts,
     recommendations,

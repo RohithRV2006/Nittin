@@ -1,4 +1,5 @@
 "use server";
+import { toSafeErrorMessage } from "@/lib/errors";
 
 import { revalidatePath } from "next/cache";
 import {
@@ -133,7 +134,7 @@ export async function upsertBomAction(input: unknown): Promise<ActionResult> {
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to save BOM",
+      error: toSafeErrorMessage(err, "Failed to save BOM"),
     };
   }
 }
@@ -197,7 +198,7 @@ export async function cloneBomAction(input: unknown): Promise<ActionResult> {
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to clone BOM",
+      error: toSafeErrorMessage(err, "Failed to clone BOM"),
     };
   }
 }
@@ -222,7 +223,7 @@ export async function toggleBomActiveAction(
     revalidatePath("/production");
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Update failed" };
+    return { ok: false, error: toSafeErrorMessage(err, "Update failed") };
   }
 }
 
@@ -694,7 +695,7 @@ export async function submitProductionRunAction(
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to save production run",
+      error: toSafeErrorMessage(err, "Failed to save production run"),
     };
   }
 }
@@ -759,7 +760,7 @@ export async function cancelProductionRunAction(
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to cancel production run",
+      error: toSafeErrorMessage(err, "Failed to cancel production run"),
     };
   }
 }

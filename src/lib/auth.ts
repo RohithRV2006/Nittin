@@ -1,6 +1,7 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { Role } from "@prisma/client";
-import { prisma } from "./prisma";
+import { prisma, withDbRetry } from "./prisma";
 import {
   SESSION_COOKIE_NAME,
   SESSION_DURATION_SECONDS,
@@ -53,6 +54,23 @@ export async function clearSessionCookie(): Promise<void> {
   });
 }
 
+const fetchUserForRequest = cache(async (userId: string) =>
+  withDbRetry(() =>
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        active: true,
+        tokenVersion: true,
+        mustChangePassword: true,
+      },
+    })
+  )
+);
+
 /**
  * Full two-layer server verification: validates JWT signature AND checks PostgreSQL
  * `User.active` + `tokenVersion` so deactivated/locked users are blocked immediately.
@@ -65,18 +83,7 @@ export async function requireVerifiedUser(
     throw new Error("UNAUTHORIZED");
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      role: true,
-      active: true,
-      tokenVersion: true,
-      mustChangePassword: true,
-    },
-  });
+  const user = await fetchUserForRequest(session.userId);
 
   if (!user || !user.active || user.tokenVersion !== session.tokenVersion) {
     throw new Error("UNAUTHORIZED");

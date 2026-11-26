@@ -34,6 +34,7 @@ This document specifies the complete page architecture, routing structure, UI la
 | `/auditor/receivables` | Payments, Collections & Debtors Ageing | Auditor | Ageing Analysis Table with Export |
 | `/auditor/audit-log` | Immutable Edit & Cancellation Audit Trail | Auditor / Admin | Filterable Audit Diff Table |
 | `/dashboard` | Owner Executive KPI Dashboard | Owner | Visual KPI Grid & Variance Alerts |
+| `/dashboard/team` | Admins & Company Governance | Owner | Manage Factory Admins, Auditors & GST Profile |
 
 ---
 

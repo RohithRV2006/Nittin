@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canAccessPath, ROLE_HOME_ROUTES } from "./lib/roles";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "./lib/jwt";
 
-const PUBLIC_PATHS = ["/login", "/api/health", "/api/demo/reset"];
+const PUBLIC_PATHS = ["/login", "/api/health", "/api/demo/reset", "/api/auth/logout"];
 const STATIC_ASSET_RE = /\.(?:png|jpg|jpeg|gif|webp|svg|ico|woff|woff2)$/i;
 
 export async function middleware(request: NextRequest) {

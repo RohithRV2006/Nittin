@@ -1,9 +1,10 @@
 "use server";
+import { toSafeErrorMessage } from "@/lib/errors";
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
-import { ResetRequestStatus } from "@prisma/client";
+import { ResetRequestStatus, Role } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import {
@@ -164,10 +165,10 @@ export async function requestPasswordResetAction(
 
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, active: true },
+    select: { id: true, active: true, role: true },
   });
 
-  if (user && user.active) {
+  if (user && user.active && user.role !== Role.OWNER) {
     const existingPending = await prisma.passwordResetRequest.findFirst({
       where: { userId: user.id, status: ResetRequestStatus.PENDING },
       select: { id: true },
@@ -202,6 +203,12 @@ export async function changeOwnPasswordAction(input: {
 }): Promise<{ ok: boolean; error?: string }> {
   try {
     const actor = await requireVerifiedUser();
+    if (actor.role === Role.OWNER) {
+      return {
+        ok: false,
+        error: "Business Owner password is managed via environment configuration.",
+      };
+    }
     const parsed = changeOwnPasswordSchema.safeParse(input);
     if (!parsed.success) {
       return {
@@ -270,7 +277,7 @@ export async function changeOwnPasswordAction(input: {
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to update password",
+      error: toSafeErrorMessage(err, "Failed to update password"),
     };
   }
 }

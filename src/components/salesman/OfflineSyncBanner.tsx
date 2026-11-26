@@ -76,7 +76,11 @@ export function OfflineSyncBanner({
       void syncAll();
     };
     window.addEventListener("online", handleOnline);
-    return () => window.removeEventListener("online", handleOnline);
+    window.addEventListener("nittin-offline-queue-updated", loadQueue);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("nittin-offline-queue-updated", loadQueue);
+    };
   }, [loadQueue, syncAll]);
 
   if (queued.length === 0) return null;

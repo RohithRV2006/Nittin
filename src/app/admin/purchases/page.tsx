@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { GrnStatus } from "@prisma/client";
+import { GrnStatus, ItemCategory } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   PurchasesWorkspace,
@@ -17,7 +17,13 @@ export default async function AdminPurchasesPage() {
   const [settings, suppliers, items, purchases, pendingGrns] = await Promise.all([
     prisma.companySettings.findUnique({ where: { id: "default" } }),
     prisma.supplier.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
-    prisma.item.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
+    prisma.item.findMany({
+      where: {
+        active: true,
+        category: { in: [ItemCategory.RAW_MATERIAL, ItemCategory.PACKAGING] },
+      },
+      orderBy: { name: "asc" },
+    }),
     prisma.purchase.findMany({
       orderBy: { purchaseDate: "desc" },
       include: {

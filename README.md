@@ -58,27 +58,42 @@ cp .env.example .env
 ```
 Configure `DATABASE_URL` (Neon Serverless or local PostgreSQL) and `SESSION_SECRET` (32+ chars). Keep `ENABLE_DEMO_MODE="false"` in production.
 
-### 2. Install, Push Schema & Initialize Admin
+### 2. Local Evaluation vs. Production Setup
+
+> **Important:** Always keep **Demo** and **Production** pointed at **separate PostgreSQL databases** (e.g., separate Neon branches). Never run Demo seed/reset against your Production database.
+
+**Option A — Clean Production Mode (Local):**
 ```powershell
 npm install
-npx prisma db push
-npm run db:seed
+# Keep ENABLE_DEMO_MODE="false" in .env
+npm run db:setup:prod
+npm run dev
 ```
-`npm run db:seed` creates only your initial `FACTORY_ADMIN` from `BOOTSTRAP_ADMIN_*` env vars—zero demo records.
+*Creates the top-level `OWNER` account (`BOOTSTRAP_OWNER_*`) and optionally an initial `FACTORY_ADMIN` (`BOOTSTRAP_ADMIN_*`)—zero demo records. The Owner can create and manage Factory Admins & Auditors anytime under **Admins & Company** (`/dashboard/team`).*
 
-### 3. Enable Benchmark Demo Dataset (For Testing / Evaluation)
+**Option B — Benchmark Demo Mode (Local Evaluation):**
 ```powershell
-# Set ENABLE_DEMO_MODE="true" in .env
-npm run db:seed:demo
+npm install
+# Set ENABLE_DEMO_MODE="true" in .env (pointing to an isolated demo DB)
+npm run db:setup:demo
+npm run dev
 ```
 *(Or click **"Load / Reset Benchmark Data"** directly on `/login` once `ENABLE_DEMO_MODE="true"` is set.)*
 
-### 4. Run Locally or via Docker Compose
-```powershell
-npm run dev
-# OR single-command local Docker stack:
-docker compose up --build
-```
+### 3. Single-Command Docker Compose (Turnkey Demo & Prod)
+* **Demo Mode (Recommended for Evaluators — auto-seeds Section 5 Benchmark into an isolated `nittin_erp_demo` DB):**
+  ```powershell
+  docker compose -f docker-compose.yml -f docker-compose.demo.yml up --build
+  ```
+* **Production Mode (`ENABLE_DEMO_MODE=false`, bootstraps only Admin into `nittin_erp` DB):**
+  ```powershell
+  docker compose up --build
+  ```
+
+### 4. Hosted Deployment (Vercel + Neon)
+Deploy two separate Vercel projects (or Preview vs. Production environments) pointing to two separate Neon branches:
+* **Demo Deployment:** `ENABLE_DEMO_MODE="true"` + Neon `demo` branch.
+* **Production Deployment:** `ENABLE_DEMO_MODE="false"` + Neon `production` branch.
 
 ### 5. Run Verification Checks
 ```powershell

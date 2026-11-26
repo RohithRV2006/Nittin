@@ -12,6 +12,7 @@ import { ResponsiveTable } from "@/components/ui/ResponsiveTable";
 import { SlideOverDrawer } from "@/components/ui/SlideOverDrawer";
 import { StatCard } from "@/components/ui/StatCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { WorkflowPipeline } from "@/components/ui/WorkflowPipeline";
 import { formatINR } from "@/lib/decimal";
 
 export interface ProductionOverviewData {
@@ -20,6 +21,7 @@ export interface ProductionOverviewData {
     inProgressRuns: number;
     completedLast7Days: number;
     varianceAlerts24h: number;
+    pendingGrns: number;
   };
   recentVarianceAlerts: Array<{
     id: string;
@@ -129,6 +131,42 @@ export function ProductionOverviewClient({
             .join(" • ")}
         </InlineAlert>
       ) : null}
+
+      <WorkflowPipeline
+        title="Daily Floor Workflow"
+        steps={[
+          {
+            step: 1,
+            title: "Log Gate Receipt (GRN)",
+            countLabel: `${data.stats.pendingGrns} pending bill`,
+            hint: "Record incoming raw material deliveries at gate",
+            href: "/production/receiving",
+            tone: data.stats.pendingGrns > 0 ? "warning" : "default",
+          },
+          {
+            step: 2,
+            title: "Check Order Demand",
+            countLabel: `${data.recommendations.length} needed`,
+            hint: "Auto-suggested batches from pending orders",
+            tone: data.recommendations.length > 0 ? "warning" : "success",
+          },
+          {
+            step: 3,
+            title: "Run Batch Production",
+            countLabel: `${data.stats.inProgressRuns} active`,
+            hint: "Issue raw stock, log good packets & scrap",
+            href: "/production/new-run",
+            tone: data.stats.inProgressRuns > 0 ? "warning" : "default",
+          },
+          {
+            step: 4,
+            title: "Maintain Recipes",
+            countLabel: `${data.stats.activeBoms} BOMs`,
+            hint: "Configure batch ratios & pack scaling",
+            href: "/production/boms",
+          },
+        ]}
+      />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Active BOMs" value={data.stats.activeBoms} />

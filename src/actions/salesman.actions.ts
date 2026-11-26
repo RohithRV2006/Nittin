@@ -1,4 +1,5 @@
 "use server";
+import { toSafeErrorMessage } from "@/lib/errors";
 
 import { revalidatePath } from "next/cache";
 import { DocumentType, ItemCategory, OrderStatus, Role } from "@prisma/client";
@@ -173,7 +174,7 @@ export async function submitFieldOrderAction(
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to submit order",
+      error: toSafeErrorMessage(err, "Failed to submit order"),
     };
   }
 }
@@ -227,7 +228,7 @@ export async function cancelFieldOrderAction(
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to cancel order",
+      error: toSafeErrorMessage(err, "Failed to cancel order"),
     };
   }
 }

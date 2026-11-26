@@ -15,20 +15,65 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+const SITE_TITLE = "Nittin ERP | Order-to-Audit Manufacturing";
+const SITE_DESCRIPTION =
+  "Production-grade Order-to-Audit ERP for packaged food manufacturing: offline-ready field orders, BOM batch costing, FIFO stock ledger, GST invoicing, and statutory Tally exports.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL ||
+      (process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "http://localhost:3000")
+  ),
+  applicationName: "Nittin ERP",
   title: {
     template: "%s | Nittin ERP",
-    default: "Nittin ERP | Order-to-Audit Manufacturing",
+    default: SITE_TITLE,
   },
-  description:
-    "Order-to-Audit ERP for packaged food manufacturing: field sales, BOM production, FIFO stock ledger, GST billing, and statutory reports.",
+  description: SITE_DESCRIPTION,
+  keywords: [
+    "Manufacturing ERP",
+    "Food Manufacturing ERP",
+    "GST Billing",
+    "BOM Costing",
+    "FIFO Inventory",
+    "Order to Audit",
+    "Tally XML Export",
+  ],
+  authors: [{ name: "Nittin Foods Pvt. Ltd." }],
   manifest: "/manifest.json",
+  icons: {
+    icon: "/nittin.png",
+    apple: "/nittin.png",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Nittin ERP",
+  },
+  openGraph: {
+    type: "website",
+    siteName: "Nittin ERP",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    images: [{ url: "/nittin.png", width: 512, height: 512, alt: "Nittin ERP Logo" }],
+  },
+  twitter: {
+    card: "summary",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    images: ["/nittin.png"],
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#78350f",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#faf6ee" },
+    { media: "(prefers-color-scheme: dark)", color: "#16100c" },
+  ],
 };
 
 export default function RootLayout({

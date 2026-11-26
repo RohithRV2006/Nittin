@@ -6,38 +6,40 @@ const prisma = new PrismaClient();
 
 /**
  * Production-safe bootstrap seed.
- * Creates ONLY the initial Factory Admin user (from env vars) and an unconfigured
- * CompanySettings record if none exist yet. Never writes demo/benchmark records.
+ * Creates ONLY the top-level OWNER account from BOOTSTRAP_OWNER_* env vars
+ * and an initial unconfigured CompanySettings record.
+ * The Owner logs in under /dashboard/team to configure Company GST Details
+ * and create Factory Admin accounts.
  */
 async function main() {
-  const adminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim();
-  const adminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD;
-  const adminName = process.env.BOOTSTRAP_ADMIN_NAME?.trim() || "Factory Admin";
+  const ownerEmail = process.env.BOOTSTRAP_OWNER_EMAIL?.trim();
+  const ownerPassword = process.env.BOOTSTRAP_OWNER_PASSWORD;
+  const ownerName = process.env.BOOTSTRAP_OWNER_NAME?.trim() || "Business Owner";
 
-  if (!adminEmail || !adminPassword) {
+  if (!ownerEmail || !ownerPassword) {
     throw new Error(
-      "BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD must be set for production bootstrap."
+      "BOOTSTRAP_OWNER_EMAIL and BOOTSTRAP_OWNER_PASSWORD must be set for production bootstrap."
     );
   }
 
-  const existingAdmin = await prisma.user.findUnique({
-    where: { email: adminEmail },
+  const existingOwner = await prisma.user.findUnique({
+    where: { email: ownerEmail },
   });
 
-  if (!existingAdmin) {
-    const hashedPassword = await bcrypt.hash(adminPassword, 12);
+  if (!existingOwner) {
+    const hashedPassword = await bcrypt.hash(ownerPassword, 12);
     await prisma.user.create({
       data: {
-        email: adminEmail,
+        email: ownerEmail,
         password: hashedPassword,
-        name: adminName,
-        role: Role.FACTORY_ADMIN,
+        name: ownerName,
+        role: Role.OWNER,
         active: true,
       },
     });
-    console.log(`Bootstrapped initial FACTORY_ADMIN user: ${adminEmail}`);
+    console.log(`Bootstrapped top-level OWNER user: ${ownerEmail}`);
   } else {
-    console.log(`Admin user already exists: ${adminEmail}`);
+    console.log(`Owner user already exists: ${ownerEmail}`);
   }
 
   const existingSettings = await prisma.companySettings.findUnique({
@@ -48,7 +50,7 @@ async function main() {
     await prisma.companySettings.create({
       data: {
         id: "default",
-        companyName: "Configure Factory Profile",
+        companyName: "Configure Company Profile",
         gstin: "",
         state: "",
         stateCode: "",
@@ -60,7 +62,7 @@ async function main() {
       },
     });
     console.log(
-      "Created initial unconfigured CompanySettings. Complete setup at /admin/masters."
+      "Created initial unconfigured CompanySettings. Owner can configure GST details at /dashboard/team."
     );
   }
 }

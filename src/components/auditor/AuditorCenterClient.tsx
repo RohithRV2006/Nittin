@@ -161,17 +161,34 @@ export function AuditorCenterClient({ data }: { data: AuditorCenterData }) {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {REPORTS.map((r) => (
-          <Link
-            key={r.href}
-            href={`${r.href}${qs}`}
-            className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5 shadow-[0_1px_2px_rgba(68,38,16,0.04)] transition hover:border-[var(--brand-primary)]"
-          >
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">{r.title}</h2>
-            <p className="mt-1 text-xs text-[var(--text-muted)]">{r.desc}</p>
-          </Link>
-        ))}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+            Statutory Registers & Compliance Modules
+          </h2>
+          <span className="text-xs text-[var(--text-muted)]">
+            Select any module below or from the sidebar
+          </span>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {REPORTS.map((r) => (
+            <Link
+              key={r.href}
+              href={`${r.href}${qs}`}
+              className="group rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 shadow-[0_1px_2px_rgba(68,38,16,0.04)] transition hover:border-[var(--brand-primary)]"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-[var(--text-primary)] group-hover:text-[var(--brand-primary)]">
+                  {r.title}
+                </h3>
+                <span className="text-xs text-[var(--text-muted)] group-hover:text-[var(--brand-primary)]">
+                  →
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">{r.desc}</p>
+            </Link>
+          ))}
+        </div>
       </div>
     </div>
   );

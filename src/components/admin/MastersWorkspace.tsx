@@ -18,7 +18,6 @@ import {
   toggleSupplierActiveAction,
   toggleUserActiveAction,
   unlockUserAction,
-  updateCompanySettingsAction,
   upsertCustomerAction,
   upsertCustomerPriceAction,
   upsertItemAction,
@@ -96,7 +95,7 @@ export interface MastersData {
   }>;
 }
 
-type TabKey = "settings" | "items" | "customers" | "suppliers" | "users";
+type TabKey = "items" | "customers" | "suppliers" | "users";
 
 const inputCls =
   "h-10 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-surface)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20";
@@ -105,12 +104,7 @@ const labelCls = "mb-1 block text-xs font-medium text-[var(--text-secondary)]";
 export function MastersWorkspace({ data }: { data: MastersData }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [tab, setTab] = useState<TabKey>(
-    data.settings.isConfigured ? "items" : "settings"
-  );
-
-  // Settings state
-  const [settingsForm, setSettingsForm] = useState(data.settings);
+  const [tab, setTab] = useState<TabKey>("items");
 
   // Item drawer
   const [itemDrawerOpen, setItemDrawerOpen] = useState(false);
@@ -234,14 +228,14 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Master Catalog & Settings"
-        subtitle="Company GST profile, SKUs, customers, suppliers, and staff access"
+        title="Master Catalog & Staff"
+        subtitle="Manage SKUs, customers, suppliers, and floor/sales staff access"
       />
 
       {!data.settings.isConfigured ? (
-        <InlineAlert variant="warning" title="Factory Profile Setup Required">
-          Enter your factory GSTIN, operating state, and 2-digit GST state code under{" "}
-          <strong>Company Settings</strong> before raising GST invoices or recording purchases.
+        <InlineAlert variant="warning" title="Company GST Profile Setup Required">
+          Company GSTIN and operating state code have not been configured yet. Ask the{" "}
+          <strong>Business Owner</strong> to save the company GST profile before raising invoices or purchases.
         </InlineAlert>
       ) : null}
 
@@ -249,7 +243,6 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
       <div className="flex flex-wrap gap-2 border-b border-[var(--border-default)] pb-3">
         {(
           [
-            ["settings", "Company Settings"],
             ["items", `Items (${data.items.length})`],
             ["customers", `Customers (${data.customers.length})`],
             ["suppliers", `Suppliers (${data.suppliers.length})`],
@@ -271,131 +264,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
         ))}
       </div>
 
-      {/* TAB 1: Company Settings */}
-      {tab === "settings" ? (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            runAction(
-              () => updateCompanySettingsAction(settingsForm),
-              "Company settings saved."
-            );
-          }}
-          className="max-w-3xl space-y-4 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5 sm:p-6"
-        >
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <label className={labelCls}>Factory / Legal Company Name</label>
-              <input
-                className={inputCls}
-                required
-                value={settingsForm.companyName}
-                onChange={(e) =>
-                  setSettingsForm({ ...settingsForm, companyName: e.target.value })
-                }
-              />
-            </div>
-            <div>
-              <label className={labelCls}>Company GSTIN (15 chars)</label>
-              <input
-                className={`${inputCls} font-mono uppercase`}
-                required
-                maxLength={15}
-                value={settingsForm.gstin}
-                onChange={(e) =>
-                  setSettingsForm({
-                    ...settingsForm,
-                    gstin: e.target.value.toUpperCase(),
-                  })
-                }
-              />
-            </div>
-            <div>
-              <label className={labelCls}>Factory Phone</label>
-              <input
-                className={inputCls}
-                value={settingsForm.phone}
-                onChange={(e) =>
-                  setSettingsForm({ ...settingsForm, phone: e.target.value })
-                }
-              />
-            </div>
-            <div>
-              <label className={labelCls}>Origin State Name</label>
-              <input
-                className={inputCls}
-                required
-                placeholder="e.g. Tamil Nadu"
-                value={settingsForm.state}
-                onChange={(e) =>
-                  setSettingsForm({ ...settingsForm, state: e.target.value })
-                }
-              />
-            </div>
-            <div>
-              <label className={labelCls}>Origin 2-Digit GST State Code</label>
-              <input
-                className={`${inputCls} font-mono`}
-                required
-                maxLength={2}
-                placeholder="e.g. 33"
-                value={settingsForm.stateCode}
-                onChange={(e) =>
-                  setSettingsForm({ ...settingsForm, stateCode: e.target.value })
-                }
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label className={labelCls}>Registered Factory Address</label>
-              <input
-                className={inputCls}
-                required
-                value={settingsForm.address}
-                onChange={(e) =>
-                  setSettingsForm({ ...settingsForm, address: e.target.value })
-                }
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label className={labelCls}>Bank Details (Printed on Tax Invoices)</label>
-              <input
-                className={inputCls}
-                value={settingsForm.bankDetails}
-                onChange={(e) =>
-                  setSettingsForm({ ...settingsForm, bankDetails: e.target.value })
-                }
-              />
-            </div>
-            <div>
-              <label className={labelCls}>Default BOM Variance Tolerance (%)</label>
-              <input
-                type="number"
-                step="0.01"
-                className={`${inputCls} tabular-nums`}
-                required
-                value={settingsForm.defaultTolerancePercent}
-                onChange={(e) =>
-                  setSettingsForm({
-                    ...settingsForm,
-                    defaultTolerancePercent: e.target.value,
-                  })
-                }
-              />
-            </div>
-          </div>
-          <div className="pt-2">
-            <button
-              type="submit"
-              disabled={isPending}
-              className="h-10 rounded-lg bg-[var(--brand-primary)] px-5 text-sm font-semibold text-white hover:bg-[var(--brand-hover)] disabled:opacity-60"
-            >
-              {isPending ? "Saving..." : "Save Company Settings"}
-            </button>
-          </div>
-        </form>
-      ) : null}
-
-      {/* TAB 2: Items */}
+      {/* TAB 1: Items */}
       {tab === "items" ? (
         <div className="space-y-4">
           <div className="flex justify-end">
@@ -790,43 +659,48 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                 key: "actions",
                 header: "Actions",
                 align: "right",
-                render: (r) => (
-                  <div className="flex justify-end gap-3">
-                    {r.lockedUntil && new Date(r.lockedUntil) > new Date() ? (
+                render: (r) =>
+                  r.role === "OWNER" || r.role === "FACTORY_ADMIN" ? (
+                    <span className="text-xs text-[var(--text-muted)]">
+                      Managed by Owner
+                    </span>
+                  ) : (
+                    <div className="flex justify-end gap-3">
+                      {r.lockedUntil && new Date(r.lockedUntil) > new Date() ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            runAction(() => unlockUserAction(r.id), "Account unlocked.")
+                          }
+                          className="text-xs font-medium text-amber-700 dark:text-amber-400 hover:underline"
+                        >
+                          Unlock
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTempPassword("");
+                          setResetPwdTarget({ id: r.id, name: r.name, email: r.email });
+                        }}
+                        className="text-xs font-medium text-[var(--brand-primary)] hover:underline"
+                      >
+                        Reset Password
+                      </button>
                       <button
                         type="button"
                         onClick={() =>
-                          runAction(() => unlockUserAction(r.id), "Account unlocked.")
+                          runAction(
+                            () => toggleUserActiveAction(r.id, !r.active),
+                            `User ${r.active ? "deactivated & sessions revoked" : "reactivated"}.`
+                          )
                         }
-                        className="text-xs font-medium text-amber-700 dark:text-amber-400 hover:underline"
+                        className="text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                       >
-                        Unlock
+                        {r.active ? "Deactivate" : "Reactivate"}
                       </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTempPassword("");
-                        setResetPwdTarget({ id: r.id, name: r.name, email: r.email });
-                      }}
-                      className="text-xs font-medium text-[var(--brand-primary)] hover:underline"
-                    >
-                      Reset Password
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        runAction(
-                          () => toggleUserActiveAction(r.id, !r.active),
-                          `User ${r.active ? "deactivated & sessions revoked" : "reactivated"}.`
-                        )
-                      }
-                      className="text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                    >
-                      {r.active ? "Deactivate" : "Reactivate"}
-                    </button>
-                  </div>
-                ),
+                    </div>
+                  ),
               },
             ]}
           />
@@ -1369,7 +1243,7 @@ export function MastersWorkspace({ data }: { data: MastersData }) {
                 setUserForm({ ...userForm, role: e.target.value as Role })
               }
             >
-              {USER_ROLES.map((r) => (
+              {USER_ROLES.filter((r) => r !== "OWNER" && r !== "FACTORY_ADMIN").map((r) => (
                 <option key={r} value={r}>
                   {ROLE_LABELS[r as UserRole]}
                 </option>

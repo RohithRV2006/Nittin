@@ -1,7 +1,10 @@
 import {
   CustomerType,
+  GrnStatus,
   ItemCategory,
   MovementType,
+  PaymentMode,
+  PaymentStatus,
   PrismaClient,
   RefType,
   Role,
@@ -53,7 +56,7 @@ export async function runDemoBenchmarkSeed(prisma: PrismaClient) {
     await tx.companySettings.create({
       data: {
         id: "default",
-        companyName: "Nittin Traditional Foods Pvt. Ltd.",
+        companyName: "Nittin Foods Pvt. Ltd.",
         gstin: "33AABCN1234F1Z5",
         state: "Tamil Nadu",
         stateCode: "33",
@@ -69,7 +72,7 @@ export async function runDemoBenchmarkSeed(prisma: PrismaClient) {
       data: {
         email: "salesman.a@nittin-demo.local",
         password: passwordHash,
-        name: "Salesman A (Raja)",
+        name: "Raja (North Zone)",
         role: Role.SALESMAN,
         phone: "+91-9000000001",
       },
@@ -79,7 +82,7 @@ export async function runDemoBenchmarkSeed(prisma: PrismaClient) {
       data: {
         email: "salesman.b@nittin-demo.local",
         password: passwordHash,
-        name: "Salesman B (Karthik)",
+        name: "Karthik (Interstate)",
         role: Role.SALESMAN,
         phone: "+91-9000000002",
       },
@@ -89,17 +92,17 @@ export async function runDemoBenchmarkSeed(prisma: PrismaClient) {
       data: {
         email: "admin@nittin-demo.local",
         password: passwordHash,
-        name: "Factory Admin (Samyuktha)",
+        name: "Samyuktha",
         role: Role.FACTORY_ADMIN,
         phone: "+91-9000000003",
       },
     });
 
-    await tx.user.create({
+    const supervisor = await tx.user.create({
       data: {
         email: "supervisor@nittin-demo.local",
         password: passwordHash,
-        name: "Floor Supervisor (Varshan)",
+        name: "Varshan",
         role: Role.PRODUCTION_SUPERVISOR,
         phone: "+91-9000000004",
       },
@@ -109,7 +112,7 @@ export async function runDemoBenchmarkSeed(prisma: PrismaClient) {
       data: {
         email: "auditor@nittin-demo.local",
         password: passwordHash,
-        name: "Auditor (Sarathi CA)",
+        name: "Sarathi CA",
         role: Role.AUDITOR,
         phone: "+91-9000000005",
       },
@@ -119,7 +122,7 @@ export async function runDemoBenchmarkSeed(prisma: PrismaClient) {
       data: {
         email: "owner@nittin-demo.local",
         password: passwordHash,
-        name: "Owner (Rohith)",
+        name: "Rohith",
         role: Role.OWNER,
         phone: "+91-9000000006",
       },
@@ -155,7 +158,7 @@ export async function runDemoBenchmarkSeed(prisma: PrismaClient) {
       },
     });
 
-    await tx.supplier.create({
+    const supplier = await tx.supplier.create({
       data: {
         name: "Cauvery Flour & Agro Mills",
         gstin: "33AAACC3333C1Z2",
@@ -261,75 +264,203 @@ export async function runDemoBenchmarkSeed(prisma: PrismaClient) {
     });
 
     const openingTimestamp = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const openingLines = [
+    const daysFromNow = (days: number) =>
+      new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+
+    const openingPurchaseInputs = [
       {
         batchNumber: "BATCH-OPEN-FLOUR",
         item: flour,
         qty: new Decimal("100.000"),
         rate: new Decimal("42.00"),
+        taxRate: new Decimal("5.00"),
+        expiryDate: daysFromNow(90),
       },
       {
         batchNumber: "BATCH-OPEN-OIL",
         item: oil,
         qty: new Decimal("30.000"),
         rate: new Decimal("140.00"),
+        taxRate: new Decimal("5.00"),
+        expiryDate: daysFromNow(180),
       },
       {
         batchNumber: "BATCH-OPEN-SPICE",
         item: spice,
         qty: new Decimal("5.000"),
         rate: new Decimal("200.00"),
+        taxRate: new Decimal("5.00"),
+        expiryDate: daysFromNow(240),
       },
       {
         batchNumber: "BATCH-OPEN-POUCH",
         item: pouch,
         qty: new Decimal("500.000"),
         rate: new Decimal("2.50"),
+        taxRate: new Decimal("18.00"),
+        expiryDate: null,
       },
       {
         batchNumber: "BATCH-OPEN-CARTON",
         item: carton,
         qty: new Decimal("30.000"),
         rate: new Decimal("15.00"),
-      },
-      {
-        batchNumber: "BATCH-OPEN-MURUKKU",
-        item: murukku,
-        qty: new Decimal("50.000"),
-        rate: new Decimal("30.00"),
+        taxRate: new Decimal("18.00"),
+        expiryDate: null,
       },
     ];
 
-    for (const entry of openingLines) {
+    let openingTaxable = new Decimal("0");
+    let openingTax = new Decimal("0");
+    for (const line of openingPurchaseInputs) {
+      const taxable = line.qty.mul(line.rate).toDecimalPlaces(2);
+      const tax = taxable.mul(line.taxRate).div(100).toDecimalPlaces(2);
+      openingTaxable = openingTaxable.plus(taxable);
+      openingTax = openingTax.plus(tax);
+    }
+    const halfTax = openingTax.div(2).toDecimalPlaces(2);
+    const otherHalfTax = openingTax.minus(halfTax);
+    const openingTotal = openingTaxable.plus(openingTax).toDecimalPlaces(2);
+
+    const openingPurchase = await tx.purchase.create({
+      data: {
+        purchaseNumber: "PUR/2026-27/0000",
+        supplierId: supplier.id,
+        billNumber: "CFM-OPEN-001",
+        purchaseDate: openingTimestamp,
+        placeOfSupply: "33",
+        taxableAmount: openingTaxable,
+        cgstAmount: halfTax,
+        sgstAmount: otherHalfTax,
+        igstAmount: new Decimal("0.00"),
+        totalAmount: openingTotal,
+        paidAmount: openingTotal,
+        paymentStatus: PaymentStatus.PAID,
+        createdById: admin.id,
+      },
+    });
+
+    await tx.supplierPayment.create({
+      data: {
+        supplierId: supplier.id,
+        purchaseId: openingPurchase.id,
+        recordedById: admin.id,
+        paymentDate: openingTimestamp,
+        amount: openingTotal,
+        paymentMode: PaymentMode.BANK_TRANSFER,
+        referenceNumber: "NEFT-OPEN-001",
+        notes: "Settlement for initial raw & packaging procurement",
+      },
+    });
+
+    await tx.goodsReceipt.create({
+      data: {
+        grnNumber: "GRN/2026-27/0000",
+        supplierId: supplier.id,
+        challanNumber: "CH-CFM-001",
+        receivedDate: openingTimestamp,
+        status: GrnStatus.VERIFIED,
+        notes: "Initial raw material and packaging gate inward",
+        receivedById: supervisor.id,
+        verifiedById: admin.id,
+        verifiedAt: openingTimestamp,
+        purchaseId: openingPurchase.id,
+        items: {
+          create: openingPurchaseInputs.map((line) => ({
+            itemId: line.item.id,
+            quantity: line.qty,
+            unit: line.item.unit,
+            batchNumber: line.batchNumber,
+            expiryDate: line.expiryDate,
+          })),
+        },
+      },
+    });
+
+    for (const line of openingPurchaseInputs) {
+      const taxable = line.qty.mul(line.rate).toDecimalPlaces(2);
+      const tax = taxable.mul(line.taxRate).div(100).toDecimalPlaces(2);
+      const lineTotal = taxable.plus(tax);
+
+      const purchaseItem = await tx.purchaseItem.create({
+        data: {
+          purchaseId: openingPurchase.id,
+          itemId: line.item.id,
+          quantity: line.qty,
+          unit: line.item.unit,
+          unitRate: line.rate,
+          taxRate: line.taxRate,
+          taxableAmount: taxable,
+          taxAmount: tax,
+          totalAmount: lineTotal,
+          batchNumber: line.batchNumber,
+          expiryDate: line.expiryDate,
+        },
+      });
+
       const batch = await tx.stockBatch.create({
         data: {
-          batchNumber: entry.batchNumber,
-          itemId: entry.item.id,
+          batchNumber: line.batchNumber,
+          itemId: line.item.id,
+          purchaseItemId: purchaseItem.id,
           receivedDate: openingTimestamp,
-          initialQty: entry.qty,
-          remainingQty: entry.qty,
-          unitRate: entry.rate,
+          expiryDate: line.expiryDate,
+          initialQty: line.qty,
+          remainingQty: line.qty,
+          unitRate: line.rate,
         },
       });
 
       await tx.stockLedger.create({
         data: {
           timestamp: openingTimestamp,
-          itemId: entry.item.id,
+          itemId: line.item.id,
           batchId: batch.id,
-          movementType: MovementType.OPENING_BALANCE,
-          quantity: entry.qty,
-          unit: entry.item.unit,
-          referenceType: RefType.OPENING,
-          referenceId: batch.id,
-          balanceAfter: entry.qty,
-          unitRate: entry.rate,
-          totalValue: entry.qty.mul(entry.rate).toDecimalPlaces(2),
+          movementType: MovementType.PURCHASE_RECEIPT,
+          quantity: line.qty,
+          unit: line.item.unit,
+          referenceType: RefType.PURCHASE,
+          referenceId: openingPurchase.id,
+          balanceAfter: line.qty,
+          unitRate: line.rate,
+          totalValue: taxable,
           createdById: admin.id,
-          notes: "Benchmark opening stock balance",
+          notes: `Inward purchase ${openingPurchase.purchaseNumber} (${openingPurchase.billNumber})`,
         },
       });
     }
+
+    const fgOpeningQty = new Decimal("50.000");
+    const fgOpeningRate = new Decimal("30.00");
+    const fgBatch = await tx.stockBatch.create({
+      data: {
+        batchNumber: "BATCH-OPEN-MURUKKU",
+        itemId: murukku.id,
+        receivedDate: openingTimestamp,
+        expiryDate: daysFromNow(45),
+        initialQty: fgOpeningQty,
+        remainingQty: fgOpeningQty,
+        unitRate: fgOpeningRate,
+      },
+    });
+
+    await tx.stockLedger.create({
+      data: {
+        timestamp: openingTimestamp,
+        itemId: murukku.id,
+        batchId: fgBatch.id,
+        movementType: MovementType.OPENING_BALANCE,
+        quantity: fgOpeningQty,
+        unit: murukku.unit,
+        referenceType: RefType.OPENING,
+        referenceId: fgBatch.id,
+        balanceAfter: fgOpeningQty,
+        unitRate: fgOpeningRate,
+        totalValue: fgOpeningQty.mul(fgOpeningRate).toDecimalPlaces(2),
+        createdById: admin.id,
+        notes: "Benchmark opening finished goods stock",
+      },
+    });
   },
   { maxWait: 10000, timeout: 30000 }
   );

@@ -1,4 +1,5 @@
 "use server";
+import { toSafeErrorMessage } from "@/lib/errors";
 
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
@@ -9,7 +10,6 @@ import { writeAuditLog } from "@/lib/engines/audit";
 import { prisma } from "@/lib/prisma";
 import {
   adminResetPasswordSchema,
-  companySettingsSchema,
   createUserSchema,
   customerPriceSchema,
   customerSchema,
@@ -21,63 +21,6 @@ export interface ActionResult<T = unknown> {
   ok: boolean;
   error?: string;
   data?: T;
-}
-
-export async function updateCompanySettingsAction(
-  input: unknown
-): Promise<ActionResult> {
-  try {
-    const actor = await requireVerifiedUser([Role.FACTORY_ADMIN]);
-    const parsed = companySettingsSchema.safeParse(input);
-    if (!parsed.success) {
-      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
-    }
-
-    const v = parsed.data;
-    await prisma.$transaction(async (tx) => {
-      const prev = await tx.companySettings.findUnique({ where: { id: "default" } });
-      const updated = await tx.companySettings.upsert({
-        where: { id: "default" },
-        create: {
-          id: "default",
-          companyName: v.companyName,
-          gstin: v.gstin,
-          state: v.state,
-          stateCode: v.stateCode,
-          address: v.address,
-          phone: v.phone || null,
-          bankDetails: v.bankDetails || null,
-          defaultTolerancePercent: percent(v.defaultTolerancePercent),
-          isConfigured: true,
-        },
-        update: {
-          companyName: v.companyName,
-          gstin: v.gstin,
-          state: v.state,
-          stateCode: v.stateCode,
-          address: v.address,
-          phone: v.phone || null,
-          bankDetails: v.bankDetails || null,
-          defaultTolerancePercent: percent(v.defaultTolerancePercent),
-          isConfigured: true,
-        },
-      });
-
-      await writeAuditLog(tx, {
-        entityType: "COMPANY_SETTINGS",
-        entityId: updated.id,
-        action: "UPDATE",
-        userId: actor.id,
-        changes: { before: prev, after: updated },
-      });
-    });
-
-    revalidatePath("/admin/masters");
-    revalidatePath("/admin");
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to save settings" };
-  }
 }
 
 export async function upsertItemAction(input: unknown): Promise<ActionResult> {
@@ -129,7 +72,7 @@ export async function upsertItemAction(input: unknown): Promise<ActionResult> {
     revalidatePath("/admin/masters");
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to save item" };
+    return { ok: false, error: toSafeErrorMessage(err, "Failed to save item") };
   }
 }
 
@@ -153,7 +96,7 @@ export async function toggleItemActiveAction(
     revalidatePath("/admin/masters");
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Update failed" };
+    return { ok: false, error: toSafeErrorMessage(err, "Update failed") };
   }
 }
 
@@ -205,7 +148,7 @@ export async function upsertCustomerAction(input: unknown): Promise<ActionResult
     revalidatePath("/admin/masters");
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to save customer" };
+    return { ok: false, error: toSafeErrorMessage(err, "Failed to save customer") };
   }
 }
 
@@ -228,7 +171,7 @@ export async function toggleCustomerActiveAction(
     revalidatePath("/admin/masters");
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Update failed" };
+    return { ok: false, error: toSafeErrorMessage(err, "Update failed") };
   }
 }
 
@@ -269,7 +212,7 @@ export async function upsertCustomerPriceAction(
     revalidatePath("/admin/masters");
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to save price" };
+    return { ok: false, error: toSafeErrorMessage(err, "Failed to save price") };
   }
 }
 
@@ -316,7 +259,7 @@ export async function upsertSupplierAction(input: unknown): Promise<ActionResult
     revalidatePath("/admin/masters");
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to save supplier" };
+    return { ok: false, error: toSafeErrorMessage(err, "Failed to save supplier") };
   }
 }
 
@@ -339,7 +282,7 @@ export async function toggleSupplierActiveAction(
     revalidatePath("/admin/masters");
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Update failed" };
+    return { ok: false, error: toSafeErrorMessage(err, "Update failed") };
   }
 }
 
@@ -352,6 +295,12 @@ export async function createUserAction(input: unknown): Promise<ActionResult> {
     }
 
     const v = parsed.data;
+    if (v.role === Role.OWNER || v.role === Role.FACTORY_ADMIN) {
+      return {
+        ok: false,
+        error: "Only the Business Owner can create Owner or Factory Admin accounts.",
+      };
+    }
     const hashedPassword = await bcrypt.hash(v.password, 12);
 
     await prisma.$transaction(async (tx) => {
@@ -378,7 +327,7 @@ export async function createUserAction(input: unknown): Promise<ActionResult> {
     revalidatePath("/admin/masters");
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to create user" };
+    return { ok: false, error: toSafeErrorMessage(err, "Failed to create user") };
   }
 }
 
@@ -393,6 +342,15 @@ export async function toggleUserActiveAction(
     }
 
     await prisma.$transaction(async (tx) => {
+      const target = await tx.user.findUnique({
+        where: { id: userId },
+        select: { role: true },
+      });
+      if (!target) throw new Error("User not found.");
+      if (target.role === Role.OWNER || target.role === Role.FACTORY_ADMIN) {
+        throw new Error("Only the Business Owner can manage Owner or Factory Admin accounts.");
+      }
+
       await tx.user.update({
         where: { id: userId },
         data: {
@@ -414,7 +372,7 @@ export async function toggleUserActiveAction(
     revalidatePath("/admin/masters");
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to update user" };
+    return { ok: false, error: toSafeErrorMessage(err, "Failed to update user") };
   }
 }
 
@@ -422,6 +380,15 @@ export async function unlockUserAction(userId: string): Promise<ActionResult> {
   try {
     const actor = await requireVerifiedUser([Role.FACTORY_ADMIN]);
     await prisma.$transaction(async (tx) => {
+      const target = await tx.user.findUnique({
+        where: { id: userId },
+        select: { role: true },
+      });
+      if (!target) throw new Error("User not found.");
+      if (target.role === Role.OWNER || target.role === Role.FACTORY_ADMIN) {
+        throw new Error("Only the Business Owner can unlock Owner or Factory Admin accounts.");
+      }
+
       await tx.user.update({
         where: { id: userId },
         data: { failedLoginAttempts: 0, lockedUntil: null },
@@ -437,7 +404,7 @@ export async function unlockUserAction(userId: string): Promise<ActionResult> {
     revalidatePath("/admin/masters");
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Unlock failed" };
+    return { ok: false, error: toSafeErrorMessage(err, "Unlock failed") };
   }
 }
 
@@ -458,6 +425,15 @@ export async function adminResetUserPasswordAction(
     const hashedPassword = await bcrypt.hash(temporaryPassword, 12);
 
     await prisma.$transaction(async (tx) => {
+      const target = await tx.user.findUnique({
+        where: { id: userId },
+        select: { role: true },
+      });
+      if (!target) throw new Error("User not found.");
+      if (target.role === Role.OWNER || target.role === Role.FACTORY_ADMIN) {
+        throw new Error("Only the Business Owner can reset Owner or Factory Admin passwords.");
+      }
+
       await tx.user.update({
         where: { id: userId },
         data: {
@@ -491,7 +467,7 @@ export async function adminResetUserPasswordAction(
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to reset password",
+      error: toSafeErrorMessage(err, "Failed to reset password"),
     };
   }
 }
