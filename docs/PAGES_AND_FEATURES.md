@@ -19,7 +19,8 @@ This document specifies the complete page architecture, routing structure, UI la
 | `/admin/invoices` | GST Invoicing & Dispatch Desk | Factory Admin | Data Table, PDF & WhatsApp Modals |
 | `/admin/purchases` | Inward Procurement & Supplier Bills | Factory Admin | Data Table & Inward Entry Modal |
 | `/admin/payments` | Payment Collections & Customer Balances | Factory Admin | Data Table & Payment Entry Modal |
-| `/admin/masters` | Master Catalog (Items, Suppliers, Customers, BOMs, Settings) | Factory Admin | Tabbed Master Management |
+| `/admin/masters` | Master Catalog (Items, Suppliers, Customers, Staff Users) | Factory Admin | Tabbed Master Management |
+| `/admin/boms` | Read-Only BOM Recipes Directory | Factory Admin | Recipe & Variance Reference |
 | `/admin/adjustments` | Stock Adjustments & Expiry Alerts | Factory Admin | Adjustment Modal & Audit Log |
 | `/production` | Production Floor Overview | Floor Supervisor | Ruggedized Tablet / Desktop |
 | `/production/new-run` | Daily Batch Run & Scrap Logger | Floor Supervisor | Touch Recipe Form with Live Math |
@@ -33,7 +34,9 @@ This document specifies the complete page architecture, routing structure, UI la
 | `/auditor/production-report` | Production Variance, Wastage & Costing Report | Auditor | Batch Analysis Table with Export |
 | `/auditor/receivables` | Payments, Collections & Debtors Ageing | Auditor | Ageing Analysis Table with Export |
 | `/auditor/audit-log` | Immutable Edit & Cancellation Audit Trail | Auditor / Admin | Filterable Audit Diff Table |
-| `/dashboard` | Owner Executive KPI Dashboard | Owner | Visual KPI Grid & Variance Alerts |
+| `/dashboard` | Owner Executive Overview | Owner | Pipeline, KPIs & Priority Watchlists |
+| `/dashboard/reports` | Owner Business Analytics & Reports | Owner | Monthly/Yearly Charts & Valuation Split |
+| `/dashboard/audit` | Owner Immutable Audit Trail | Owner | Filterable Cross-Portal Activity Log |
 | `/dashboard/team` | Admins & Company Governance | Owner | Manage Factory Admins, Auditors & GST Profile |
 
 ---
@@ -44,7 +47,7 @@ This document specifies the complete page architecture, routing structure, UI la
 * **Layout:** Clean, centered authentication card with responsive mobile and desktop layout.
 * **Features & Controls:**
   * **Email & `PasswordInput` Fields:** Includes Eye/EyeOff password visibility toggle and server Zod validation.
-  * **"Forgot password?" Action:** Submits a non-enumerating `PasswordResetRequest` to Factory Admin.
+  * **"Forgot password?" Action:** Submits a non-enumerating `PasswordResetRequest` to Factory Admin/Owner (excluded for `OWNER` accounts, whose credentials are env-managed).
   * **"Sign In" Button:** Submits credentials, validates session cookie (`HttpOnly`), and checks brute-force/rate limits.
   * **Demo 1-Click Role Switcher (Gated by `ENABLE_DEMO_MODE=true`):**
     * Button: *“Login as Salesman A (Mobile View)”*
@@ -145,7 +148,7 @@ This document specifies the complete page architecture, routing structure, UI la
     * Supplier dropdown selector.
     * Invoice / Bill Number input.
     * Purchase Date picker.
-    * Item selector (e.g., *Flour*, *Cooking Oil*, *200g Pouches*).
+    * Item selector (Raw Materials & Packaging only—finished goods are excluded from inward purchasing; e.g., *Flour*, *Cooking Oil*, *200g Pouches*).
     * Quantity input with unit (e.g., 60 kg).
     * Unit Rate input (e.g., ₹45.00/kg).
     * GST % dropdown (e.g., 5.00%).
@@ -170,8 +173,7 @@ This document specifies the complete page architecture, routing structure, UI la
   * **Items Tab:** Create/edit/deactivate (`active`) Raw Materials, Packaging, and Finished Goods with SKU code, canonical base unit (`KG`, `GRAM`, `LITRE`, `ML`, `PIECE`, `PACKET`, `CARTON`), optional `packWeightGrams`, `unitsPerCarton`, HSN code, GST %, selling price, and reorder level.
   * **Customers Tab:** Manage Retailers & Distributors with GSTIN, 2-digit State Code (`33`, `29`, etc.), address, phone, credit limit, credit days, assigned Salesman, and optional **`CustomerPrice`** SKU rate overrides.
   * **Suppliers Tab:** Manage raw/packaging suppliers with GSTIN, state code, phone, and address (soft-deactivatable via `active`).
-  * **Users & Roles Tab:** Create staff accounts, assign roles, reset temporary passwords (`mustChangePassword = true`, resolving Forgot Password requests and revoking active sessions), activate/deactivate (`active` + increments `tokenVersion`), and unlock brute-force locked accounts.
-  * **Company Settings Tab:** Configure factory name, GSTIN, state code (`33`), address, bank details for PDF invoices, and default BOM variance tolerance (`3.00%`).
+  * **Users & Roles Tab:** Create operational staff accounts (`SALESMAN`, `PRODUCTION_SUPERVISOR`, `AUDITOR`), reset temporary passwords (`mustChangePassword = true`, resolving Forgot Password requests and revoking active sessions), activate/deactivate (`active` + increments `tokenVersion`), and unlock brute-force locked accounts. *(Note: `OWNER` and `FACTORY_ADMIN` governance plus Company GST Settings live exclusively under Owner's `/dashboard/team`, while BOM recipes are viewable read-only at `/admin/boms`.)*
 
 #### F. Stock Adjustments & Expiry Alerts (`/admin/adjustments`)
 * **Features & Controls:**
@@ -243,7 +245,7 @@ This document specifies the complete page architecture, routing structure, UI la
 * **Global Controls:**
   * Date Range Filter (From Date — To Date).
   * Financial Year Selector (e.g., `2024-2025`).
-  * Tab navigation across all 6 statutory statements.
+  * Persistent left sidebar links across all 8 statutory modules plus unified Overview quick-links.
   * **"Export Tally XML"** & **"Export Tally Excel"** buttons (exports Sales, Purchase, and Receipt vouchers formatted for Tally Prime import with GST duty ledgers).
 
 #### B. Sales Register (`/auditor/sales-register`)
@@ -296,13 +298,8 @@ This document specifies the complete page architecture, routing structure, UI la
 
 ---
 
-### 3.6 Owner Executive Dashboard (`/dashboard`)
-* **Layout:** Visual metric grid designed for business owners to assess factory pulse in 30 seconds.
-* **Features & Widgets:**
-  * **Today's Commercial Pulse Card:** Total orders booked, total invoiced value, collections received today.
-  * **Finished Goods Warehouse Stock Card:** Current inventory vs. pending dispatch commitments (e.g., 88 packets available).
-  * **Wastage & Production Variance Alerts Widget:**
-    * Highlights runs with tolerance breach (e.g., *Batch #PR-2024-001: Yield -6.00% [Deficit: 12 pkts], Oil +5.00%*).
-  * **Unit Economics Card:** Average cost per packet (₹30.90), selling price (₹50.00), and net gross margin percentage (38.2%).
-  * **Debtors & Cash Flow Card:** Total outstanding receivables across market retailers (e.g., ₹3,875.00 from Retailer A).
-  * **Raw Material Low-Stock Warnings:** Real-time indicator for items nearing reorder thresholds.
+### 3.6 Owner Control Tower (`/dashboard`, `/dashboard/reports`, `/dashboard/audit`, `/dashboard/team`)
+* **Executive Overview (`/dashboard`):** Live 5-stage Operations Pipeline (`WorkflowPipeline`), Onboarding `SetupChecklist`, 4 executive KPI cards (Today's Pulse, MTD Sales vs Purchases, Finished Stock, Unit Economics), consolidated variance/expiry alerts, low-stock-prioritized watchlist, top debtors, recent costing runs, and recent activity preview linking to Analytics and Audit Trail.
+* **Analytics & Reports (`/dashboard/reports`):** Interactive **Monthly (12M)** and **Yearly** Sales vs. Purchases vs. Collections bar visualizations, Top Products & Top Customers share bars, FIFO Inventory Valuation split (Raw / Packaging / Finished Goods), and period financial summary table.
+* **Audit Trail (`/dashboard/audit`):** Company-wide searchable, entity-filterable, exportable immutable audit log across all portals.
+* **Admins & Company Governance (`/dashboard/team`):** Create/manage `FACTORY_ADMIN` & `AUDITOR` accounts, resolve admin password resets, and configure legal Company Name, GSTIN, state code, address, bank details, and BOM tolerance (`CompanySettings`).
