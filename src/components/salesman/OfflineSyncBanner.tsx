@@ -6,6 +6,7 @@ import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { submitFieldOrderAction } from "@/actions/salesman.actions";
 import { InlineAlert } from "@/components/ui/InlineAlert";
+import { probeServerReachable, reportNetworkStatus } from "@/lib/network";
 import {
   enqueueOfflineOrder,
   getQueuedOfflineOrders,
@@ -29,7 +30,8 @@ export function OfflineSyncBanner({
   }, [onQueueChanged]);
 
   const syncAll = useCallback(async () => {
-    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+    const reachable = await probeServerReachable();
+    if (!reachable) return;
     const rows = await getQueuedOfflineOrders();
     if (rows.length === 0) return;
 
@@ -58,7 +60,8 @@ export function OfflineSyncBanner({
           });
         }
       } catch {
-        // Network still unstable; keep queued
+        // Network still unstable; keep queued & notify banner
+        reportNetworkStatus(false);
       }
     }
 
@@ -75,10 +78,16 @@ export function OfflineSyncBanner({
     const handleOnline = () => {
       void syncAll();
     };
+    const handleNetworkCustom = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ online?: boolean }>).detail;
+      if (detail?.online) void syncAll();
+    };
     window.addEventListener("online", handleOnline);
+    window.addEventListener("nittin-network-status", handleNetworkCustom);
     window.addEventListener("nittin-offline-queue-updated", loadQueue);
     return () => {
       window.removeEventListener("online", handleOnline);
+      window.removeEventListener("nittin-network-status", handleNetworkCustom);
       window.removeEventListener("nittin-offline-queue-updated", loadQueue);
     };
   }, [loadQueue, syncAll]);

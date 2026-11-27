@@ -34,6 +34,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useNetworkOnline } from "@/lib/network";
 import { changeOwnPasswordAction, logoutAction } from "@/actions/auth.actions";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { SlideOverDrawer } from "@/components/ui/SlideOverDrawer";
@@ -152,7 +153,7 @@ export function AppShell({
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [online, setOnline] = useState(true);
+  const online = useNetworkOnline();
   const [pwdOpen, setPwdOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -193,16 +194,51 @@ export function AppShell({
     } catch {
       // Ignore storage errors
     }
-    setOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
-    const handleOnline = () => setOnline(true);
-    const handleOffline = () => setOnline(false);
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
   }, []);
+
+  useEffect(() => {
+    if (
+      userRole !== "SALESMAN" ||
+      typeof window === "undefined" ||
+      !("serviceWorker" in navigator)
+    ) {
+      return;
+    }
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then((reg) => {
+        if (!online) return;
+        const worker = reg.active ?? navigator.serviceWorker.controller;
+        worker?.postMessage({ type: "WARM_SALESMAN_CACHE" });
+      })
+      .catch(() => {
+        // Ignore SW registration failure on unsupported/restricted contexts
+      });
+  }, [userRole, online]);
+
+  const clearOfflineSwCache = () => {
+    if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.controller?.postMessage({
+        type: "CLEAR_SALESMAN_CACHE",
+      });
+    }
+  };
+
+  const handleLinkClick = (
+    e: React.MouseEvent<HTMLAnchorElement>,
+    href: string,
+    closeDrawer = false
+  ) => {
+    if (closeDrawer) setDrawerOpen(false);
+    if (!online && href !== pathname) {
+      e.preventDefault();
+      if (href === "/salesman" || href.startsWith("/salesman/")) {
+        window.location.assign(href);
+        return;
+      }
+      toast.info("You are offline. Reconnect before switching pages.");
+    }
+  };
 
   const toggleSidebar = () => {
     setSidebarCollapsed((prev) => {
@@ -290,12 +326,7 @@ export function AppShell({
                 ) : null}
                 <Link
                   href={item.href}
-                  onClick={(e) => {
-                    if (!online && item.href !== pathname) {
-                      e.preventDefault();
-                      toast.info("You are offline. Reconnect before switching pages.");
-                    }
-                  }}
+                  onClick={(e) => handleLinkClick(e, item.href)}
                   title={sidebarCollapsed ? item.label : undefined}
                   className={`flex items-center rounded-lg py-2 text-sm font-medium transition ${
                     sidebarCollapsed ? "justify-center px-2" : "gap-2.5 px-3"
@@ -343,7 +374,7 @@ export function AppShell({
               {!sidebarCollapsed ? <span>Change Password</span> : null}
             </button>
           ) : null}
-          <form action={logoutAction}>
+          <form action={logoutAction} onSubmit={clearOfflineSwCache}>
             <button
               type="submit"
               title={sidebarCollapsed ? "Sign Out" : undefined}
@@ -397,13 +428,7 @@ export function AppShell({
                   <Link
                     key={item.href}
                     href={item.href}
-                    onClick={(e) => {
-                      setDrawerOpen(false);
-                      if (!online && item.href !== pathname) {
-                        e.preventDefault();
-                        toast.info("You are offline. Reconnect before switching pages.");
-                      }
-                    }}
+                    onClick={(e) => handleLinkClick(e, item.href, true)}
                     className={`flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
                       active
                         ? "bg-[var(--brand-soft)] text-[var(--brand-primary)]"
@@ -433,7 +458,7 @@ export function AppShell({
                   Change Password
                 </button>
               ) : null}
-              <form action={logoutAction}>
+              <form action={logoutAction} onSubmit={clearOfflineSwCache}>
                 <button
                   type="submit"
                   className="flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-[var(--border-default)] px-3 text-sm font-medium text-[var(--text-secondary)] hover:bg-[#FEF2F2] hover:text-[#B91C1C]"
@@ -615,12 +640,7 @@ export function AppShell({
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={(e) => {
-                  if (!online && item.href !== pathname) {
-                    e.preventDefault();
-                    toast.info("You are offline. Reconnect before switching pages.");
-                  }
-                }}
+                onClick={(e) => handleLinkClick(e, item.href)}
                 className={`flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] font-medium ${
                   active
                     ? "text-[var(--brand-primary)]"

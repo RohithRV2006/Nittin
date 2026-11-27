@@ -9,6 +9,7 @@ import { StatCard } from "@/components/ui/StatCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { WorkflowPipeline } from "@/components/ui/WorkflowPipeline";
 import { formatINR } from "@/lib/decimal";
+import { useNetworkOnline } from "@/lib/network";
 
 export interface SalesmanHomeData {
   salesmanName: string;
@@ -27,6 +28,13 @@ export interface SalesmanHomeData {
 }
 
 export function SalesmanHomeClient({ data }: { data: SalesmanHomeData }) {
+  const online = useNetworkOnline();
+  const navOfflineSafe = (e: React.MouseEvent, href: string) => {
+    if (!online) {
+      e.preventDefault();
+      window.location.assign(href);
+    }
+  };
   return (
     <div className="space-y-6">
       <PageHeader
@@ -35,6 +43,7 @@ export function SalesmanHomeClient({ data }: { data: SalesmanHomeData }) {
         actions={
           <Link
             href="/salesman/new-order"
+            onClick={(e) => navOfflineSafe(e, "/salesman/new-order")}
             className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-[var(--brand-primary)] px-4 text-sm font-semibold text-white hover:bg-[var(--brand-hover)]"
           >
             <PlusCircle className="h-4 w-4" />
@@ -80,6 +89,7 @@ export function SalesmanHomeClient({ data }: { data: SalesmanHomeData }) {
           <h2 className="text-sm font-semibold text-[var(--text-primary)]">Recent Orders</h2>
           <Link
             href="/salesman/orders"
+            onClick={(e) => navOfflineSafe(e, "/salesman/orders")}
             className="text-xs font-semibold text-[var(--brand-primary)] hover:underline"
           >
             View All & Customer Sales →

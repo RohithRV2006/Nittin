@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { formatINR, money, toDec } from "@/lib/decimal";
 import { computeGstSplit } from "@/lib/engines/tax";
 import { formatDisplayQty, isIntegerUnit } from "@/lib/enums";
+import { reportNetworkStatus, useNetworkOnline } from "@/lib/network";
 import {
   enqueueOfflineOrder,
   loadSalesmanCatalogCache,
@@ -56,6 +57,7 @@ export function NewOrderWorkspace({
   initialData: NewOrderCatalogData;
 }) {
   const router = useRouter();
+  const isOnline = useNetworkOnline();
   const [isPending, startTransition] = useTransition();
 
   const [catalog, setCatalog] = useState<NewOrderCatalogData>(initialData);
@@ -194,17 +196,20 @@ export function NewOrderWorkspace({
     });
     window.dispatchEvent(new Event("nittin-offline-queue-updated"));
     setNotes("");
-    const isOnline = typeof navigator === "undefined" || navigator.onLine;
     toast.warning(
       `Saved offline for ${selectedCustomer.name}. Auto-syncs when online.`,
-      isOnline
-        ? {
-            action: {
-              label: "View Queue",
-              onClick: () => router.push("/salesman/orders"),
-            },
-          }
-        : undefined
+      {
+        action: {
+          label: "View Queue",
+          onClick: () => {
+            if (isOnline) {
+              router.push("/salesman/orders");
+            } else {
+              window.location.assign("/salesman/orders");
+            }
+          },
+        },
+      }
     );
   };
 
@@ -221,7 +226,8 @@ export function NewOrderWorkspace({
         ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
+    if (!isOnline || (typeof navigator !== "undefined" && !navigator.onLine)) {
+      reportNetworkStatus(false);
       await queueOffline(clientRequestId);
       return;
     }
@@ -252,7 +258,8 @@ export function NewOrderWorkspace({
         });
         router.refresh();
       } catch {
-        // Network dropped mid-submit: save safely to offline queue
+        // Network dropped mid-submit: mark offline immediately & save safely to offline queue
+        reportNetworkStatus(false);
         await queueOffline(clientRequestId);
       }
     });
