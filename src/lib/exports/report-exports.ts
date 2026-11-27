@@ -45,15 +45,22 @@ export function downloadXlsx(
   XLSX.writeFile(wb, filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`);
 }
 
+export interface PdfReportOptions {
+  orientation?: "portrait" | "landscape";
+  columnStyles?: Record<number, { cellWidth?: number | "auto" | "wrap" }>;
+}
+
 export async function downloadReportPdf(
   filename: string,
   title: string,
   subtitle: string,
   headers: string[],
   rows: Array<Array<string | number>>,
-  totalsRow?: Array<string | number>
+  totalsRow?: Array<string | number>,
+  options?: PdfReportOptions
 ) {
-  const orientation = headers.length > 7 ? "landscape" : "portrait";
+  const orientation =
+    options?.orientation ?? (headers.length > 7 ? "landscape" : "portrait");
   const doc = new jsPDF({ orientation, unit: "mm", format: "a4" });
   const logo = await loadLogoDataUrl();
 
@@ -86,8 +93,10 @@ export async function downloadReportPdf(
       font: "helvetica",
       fontSize: 7.5,
       cellPadding: 2,
+      overflow: "linebreak",
       textColor: [35, 23, 15],
     },
+    columnStyles: options?.columnStyles,
     headStyles: {
       fillColor: [120, 53, 15],
       textColor: [255, 253, 249],

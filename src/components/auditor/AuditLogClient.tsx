@@ -93,7 +93,20 @@ export function AuditLogClient({ data }: { data: AuditLogPageData }) {
                 "System Audit Trail",
                 `Period: ${data.from} to ${data.to}`,
                 headers,
-                rows
+                rows,
+                undefined,
+                {
+                  orientation: "landscape",
+                  columnStyles: {
+                    0: { cellWidth: 28 },
+                    1: { cellWidth: 28 },
+                    2: { cellWidth: 26 },
+                    3: { cellWidth: 28 },
+                    4: { cellWidth: 20 },
+                    5: { cellWidth: 42 },
+                    6: { cellWidth: "auto" },
+                  },
+                }
               )
             }
           />
