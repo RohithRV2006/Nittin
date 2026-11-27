@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+export async function HEAD(request: NextRequest) {
+  if (request.nextUrl.searchParams.get("ping") === "1") {
+    return new NextResponse(null, {
+      status: 200,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
+  return new NextResponse(null, { status: 200 });
+}
+
 export async function GET(request: NextRequest) {
   // Lightweight connectivity heartbeat for client offline/online detection (zero DB query)
   if (request.nextUrl.searchParams.get("ping") === "1") {

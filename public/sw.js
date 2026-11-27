@@ -30,6 +30,8 @@ self.addEventListener("message", (event) => {
       caches.open(PAGES_CACHE).then(async (cache) => {
         for (const route of SALESMAN_ROUTES) {
           try {
+            const alreadyCached = await cache.match(route);
+            if (alreadyCached) continue;
             const res = await fetch(route, { credentials: "include" });
             if (res.ok && res.status === 200 && !res.redirected) {
               await cache.put(route, res.clone());

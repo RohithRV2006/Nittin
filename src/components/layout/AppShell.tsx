@@ -208,6 +208,12 @@ export function AppShell({
       .register("/sw.js")
       .then((reg) => {
         if (!online) return;
+        try {
+          if (sessionStorage.getItem("nittin_sw_warmed_v1") === "1") return;
+          sessionStorage.setItem("nittin_sw_warmed_v1", "1");
+        } catch {
+          // Ignore storage errors
+        }
         const worker = reg.active ?? navigator.serviceWorker.controller;
         worker?.postMessage({ type: "WARM_SALESMAN_CACHE" });
       })
@@ -217,6 +223,11 @@ export function AppShell({
   }, [userRole, online]);
 
   const clearOfflineSwCache = () => {
+    try {
+      sessionStorage.removeItem("nittin_sw_warmed_v1");
+    } catch {
+      // Ignore storage errors
+    }
     if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
       navigator.serviceWorker.controller?.postMessage({
         type: "CLEAR_SALESMAN_CACHE",

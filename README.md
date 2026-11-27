@@ -128,7 +128,7 @@ Configure at minimum:
 
 * **Live Demo (For Evaluation Purposes):** https://nittin-erp-demo.vercel.app/
   *(Runs in `ENABLE_DEMO_MODE="true"` against an isolated Neon `demo` branch with 1-click role login and **Load / Reset Benchmark Data**.)*
-* **Walkthrough Video:** [Watch Demo Walkthrough Video](REPLACE_WITH_YOUTUBE_OR_DRIVE_LINK)
+* **Walkthrough Video:** [Watch Demo Walkthrough Video](https://drive.google.com/file/d/11BdKzDKVko4Zyf2q7pPK5EJmNh7ziym1/view?usp=drive_link)
 
 ### 5. Automated Verification Suite
 
