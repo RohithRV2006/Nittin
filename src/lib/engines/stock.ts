@@ -14,15 +14,17 @@ export async function getItemStockMap(
   db: DbClient,
   itemIds?: string[]
 ): Promise<Map<string, Decimal>> {
-  const grouped = await db.stockLedger.groupBy({
+  const grouped = await db.stockBatch.groupBy({
     by: ["itemId"],
-    where: itemIds ? { itemId: { in: itemIds } } : undefined,
-    _sum: { quantity: true },
+    where: itemIds
+      ? { itemId: { in: itemIds }, remainingQty: { gt: 0 } }
+      : { remainingQty: { gt: 0 } },
+    _sum: { remainingQty: true },
   });
 
   const map = new Map<string, Decimal>();
   for (const row of grouped) {
-    map.set(row.itemId, qty(row._sum.quantity ?? 0));
+    map.set(row.itemId, qty(row._sum.remainingQty ?? 0));
   }
   return map;
 }

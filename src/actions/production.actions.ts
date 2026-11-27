@@ -19,7 +19,7 @@ import {
   consumeFifoBatches,
   recordInwardBatchAndLedger,
 } from "@/lib/engines/stock";
-import { prisma } from "@/lib/prisma";
+import { runTransaction } from "@/lib/prisma";
 import { convertUnit } from "@/lib/units";
 import { isIntegerUnit } from "@/lib/enums";
 import {
@@ -46,7 +46,7 @@ export async function upsertBomAction(input: unknown): Promise<ActionResult> {
       return { ok: false, error: "Duplicate ingredient/packaging items are not allowed in a BOM." };
     }
 
-    await prisma.$transaction(async (tx) => {
+    await runTransaction(async (tx) => {
       const finishedItem = await tx.item.findUnique({
         where: { id: v.finishedItemId },
       });
@@ -150,7 +150,7 @@ export async function cloneBomAction(input: unknown): Promise<ActionResult> {
     const v = parsed.data;
     const scale = toDec(v.scaleFactor);
 
-    await prisma.$transaction(async (tx) => {
+    await runTransaction(async (tx) => {
       const source = await tx.bOM.findUnique({
         where: { id: v.sourceBomId },
         include: { items: true },
@@ -209,7 +209,7 @@ export async function toggleBomActiveAction(
 ): Promise<ActionResult> {
   try {
     const actor = await requireVerifiedUser(ALLOWED_ROLES);
-    await prisma.$transaction(async (tx) => {
+    await runTransaction(async (tx) => {
       await tx.bOM.update({ where: { id }, data: { active } });
       await writeAuditLog(tx, {
         entityType: "BOM",
@@ -243,7 +243,7 @@ export async function submitProductionRunAction(
       return { ok: false, error: "Invalid run date." };
     }
 
-    const res = await prisma.$transaction(async (tx) => {
+    const res = await runTransaction(async (tx) => {
       const bom = await tx.bOM.findUnique({
         where: { id: v.bomId },
         include: {
@@ -711,7 +711,7 @@ export async function cancelProductionRunAction(
     }
 
     const { runId, reason } = parsed.data;
-    await prisma.$transaction(async (tx) => {
+    await runTransaction(async (tx) => {
       const run = await tx.productionRun.findUnique({
         where: { id: runId },
         include: { consumptions: { include: { item: true } } },

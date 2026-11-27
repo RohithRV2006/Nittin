@@ -1,12 +1,13 @@
 import { ItemCategory } from "@prisma/client";
 import type { BomsPageData } from "@/components/production/BomsWorkspace";
 import { money, toDec } from "@/lib/decimal";
-import { prisma } from "@/lib/prisma";
+import { getCachedCompanySettings, prisma, withDbRetry } from "@/lib/prisma";
 import { convertUnit } from "@/lib/units";
 
 export async function getBomsPageData(): Promise<BomsPageData> {
-  const [settings, items, boms, latestBatches] = await Promise.all([
-    prisma.companySettings.findUnique({ where: { id: "default" } }),
+  const [settings, items, boms, latestBatches] = await withDbRetry(() =>
+    Promise.all([
+      getCachedCompanySettings(),
     prisma.item.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
     prisma.bOM.findMany({
       orderBy: [{ active: "desc" }, { name: "asc" }],
@@ -20,7 +21,8 @@ export async function getBomsPageData(): Promise<BomsPageData> {
       orderBy: [{ receivedDate: "asc" }, { createdAt: "asc" }],
       select: { itemId: true, remainingQty: true, unitRate: true },
     }),
-  ]);
+    ])
+  );
 
   const batchesByItem = new Map<
     string,
@@ -51,7 +53,7 @@ export async function getBomsPageData(): Promise<BomsPageData> {
 
   return {
     defaultTolerancePercent: settings
-      ? settings.defaultTolerancePercent.toFixed(2)
+      ? settings.defaultTolerancePercent
       : "3.00",
     finishedItems: items
       .filter((i) => i.category === ItemCategory.FINISHED_GOOD)

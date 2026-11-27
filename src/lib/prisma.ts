@@ -1,4 +1,6 @@
-import { PrismaClient } from "@prisma/client";
+import { cache } from "react";
+import { unstable_cache } from "next/cache";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { isDatabaseUnavailableError } from "./errors";
 
 const globalForPrisma = globalThis as unknown as {
@@ -13,6 +15,17 @@ export const prisma =
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
+}
+
+/**
+ * Extended transaction options for serverless PostgreSQL (Neon) latency.
+ */
+export const TX_OPTIONS = { maxWait: 10000, timeout: 30000 } as const;
+
+export function runTransaction<T>(
+  operation: (tx: Prisma.TransactionClient) => Promise<T>
+): Promise<T> {
+  return prisma.$transaction(operation, TX_OPTIONS);
 }
 
 /**
@@ -36,3 +49,24 @@ export async function withDbRetry<T>(
   }
   throw lastError;
 }
+
+const fetchCompanySettingsCached = unstable_cache(
+  async () => {
+    const row = await withDbRetry(() =>
+      prisma.companySettings.findUnique({ where: { id: "default" } })
+    );
+    if (!row) return null;
+    return {
+      ...row,
+      defaultTolerancePercent: row.defaultTolerancePercent.toFixed(2),
+    };
+  },
+  ["company-settings-default"],
+  { revalidate: 300, tags: ["company-settings"] }
+);
+
+/**
+ * Request + Data-Cache deduplicated lookup for `CompanySettings`.
+ * Invalidated on settings update or demo reset via `revalidateTag("company-settings")`.
+ */
+export const getCachedCompanySettings = cache(() => fetchCompanySettingsCached());

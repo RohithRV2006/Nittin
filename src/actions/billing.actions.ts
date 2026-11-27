@@ -27,7 +27,7 @@ import {
 } from "@/lib/engines/stock";
 import { computeGstSplit } from "@/lib/engines/tax";
 import { isIntegerUnit } from "@/lib/enums";
-import { prisma } from "@/lib/prisma";
+import { runTransaction } from "@/lib/prisma";
 import { getFinancialYear } from "@/lib/security";
 import {
   approveOrderSchema,
@@ -51,7 +51,7 @@ export async function approveAndInvoiceOrderAction(
     }
 
     const v = parsed.data;
-    const res = await prisma.$transaction(async (tx) => {
+    const res = await runTransaction(async (tx) => {
       const settings = await tx.companySettings.findUnique({
         where: { id: "default" },
       });
@@ -264,7 +264,7 @@ export async function holdOrderAction(input: unknown): Promise<ActionResult> {
       return { ok: false, error: "Invalid request" };
     }
 
-    await prisma.$transaction(async (tx) => {
+    await runTransaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: parsed.data.orderId } });
       if (!order) throw new Error("Order not found.");
       if (order.status !== OrderStatus.SUBMITTED && order.status !== OrderStatus.APPROVED) {
@@ -305,7 +305,7 @@ export async function rejectOrderAction(input: unknown): Promise<ActionResult> {
       return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid reason" };
     }
 
-    await prisma.$transaction(async (tx) => {
+    await runTransaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: parsed.data.orderId } });
       if (!order) throw new Error("Order not found.");
       if (order.status === OrderStatus.INVOICED || order.status === OrderStatus.DISPATCHED) {
@@ -353,7 +353,7 @@ export async function recordDispatchAction(
     }
 
     const v = parsed.data;
-    const res = await prisma.$transaction(async (tx) => {
+    const res = await runTransaction(async (tx) => {
       const invoice = await tx.invoice.findUnique({
         where: { id: v.invoiceId },
         include: { items: { include: { item: true } } },
@@ -546,7 +546,7 @@ export async function recordSalesReturnAction(input: unknown): Promise<
     }
 
     const v = parsed.data;
-    const res = await prisma.$transaction(async (tx) => {
+    const res = await runTransaction(async (tx) => {
       const [settings, invoice] = await Promise.all([
         tx.companySettings.findUnique({ where: { id: "default" } }),
         tx.invoice.findUnique({
@@ -797,7 +797,7 @@ export async function cancelInvoiceWithCreditNoteAction(
     }
 
     const { invoiceId, reason } = parsed.data;
-    const res = await prisma.$transaction(async (tx) => {
+    const res = await runTransaction(async (tx) => {
       const invoice = await tx.invoice.findUnique({
         where: { id: invoiceId },
         include: { items: { include: { item: true } } },
@@ -913,7 +913,7 @@ export async function generateMockEInvoiceAction(invoiceId: string): Promise<
   try {
     const actor = await requireVerifiedUser([Role.FACTORY_ADMIN]);
 
-    const res = await prisma.$transaction(async (tx) => {
+    const res = await runTransaction(async (tx) => {
       const [settings, invoice] = await Promise.all([
         tx.companySettings.findUnique({ where: { id: "default" } }),
         tx.invoice.findUnique({
@@ -1025,7 +1025,7 @@ export async function recordCustomerPaymentAction(
       return { ok: false, error: "Invalid payment date." };
     }
 
-    const res = await prisma.$transaction(async (tx) => {
+    const res = await runTransaction(async (tx) => {
       const payAmount = money(v.amount);
 
       if (v.invoiceId) {

@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { InvoiceStatus } from "@prisma/client";
+import { InvoiceStatus, PaymentStatus } from "@prisma/client";
 import { money, qty } from "@/lib/decimal";
 import { getItemStockMap } from "@/lib/engines/stock";
-import { prisma } from "@/lib/prisma";
+import { getCachedCompanySettings, prisma, withDbRetry } from "@/lib/prisma";
 import {
   OrdersWorkspace,
   type OrdersPageData,
@@ -16,10 +16,12 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function AdminOrdersPage() {
-  const [settings, orders, stockMap, postedInvoices] = await Promise.all([
-    prisma.companySettings.findUnique({ where: { id: "default" } }),
-    prisma.order.findMany({
-      orderBy: { orderDate: "desc" },
+  const [settings, orders, stockMap, postedInvoices] = await withDbRetry(() =>
+    Promise.all([
+      getCachedCompanySettings(),
+      prisma.order.findMany({
+        orderBy: { orderDate: "desc" },
+        take: 250,
       include: {
         salesman: { select: { name: true } },
         customer: {
@@ -43,16 +45,20 @@ export default async function AdminOrdersPage() {
       },
     }),
     getItemStockMap(prisma),
-    prisma.invoice.findMany({
-      where: { status: InvoiceStatus.POSTED },
-      select: {
-        customerId: true,
-        totalAmount: true,
-        paidAmount: true,
-        creditNotes: { select: { amount: true } },
-      },
-    }),
-  ]);
+      prisma.invoice.findMany({
+        where: {
+          status: InvoiceStatus.POSTED,
+          paymentStatus: { in: [PaymentStatus.UNPAID, PaymentStatus.PARTIAL] },
+        },
+        select: {
+          customerId: true,
+          totalAmount: true,
+          paidAmount: true,
+          creditNotes: { select: { amount: true } },
+        },
+      }),
+    ])
+  );
 
   const dueByCustomer = new Map<string, ReturnType<typeof money>>();
   for (const inv of postedInvoices) {

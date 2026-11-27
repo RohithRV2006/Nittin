@@ -21,7 +21,7 @@ import {
 } from "@/lib/engines/stock";
 import { computeGstSplit } from "@/lib/engines/tax";
 import { isIntegerUnit } from "@/lib/enums";
-import { prisma } from "@/lib/prisma";
+import { runTransaction } from "@/lib/prisma";
 import { convertUnit } from "@/lib/units";
 import {
   createGoodsReceiptSchema,
@@ -48,7 +48,7 @@ export async function recordPurchaseAction(
       return { ok: false, error: "Invalid purchase date." };
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await runTransaction(async (tx) => {
       const settings = await tx.companySettings.findUnique({
         where: { id: "default" },
       });
@@ -248,7 +248,7 @@ export async function createGoodsReceiptAction(
       return { ok: false, error: "Invalid received date." };
     }
 
-    const res = await prisma.$transaction(async (tx) => {
+    const res = await runTransaction(async (tx) => {
       const supplier = await tx.supplier.findUnique({ where: { id: v.supplierId } });
       if (!supplier || !supplier.active) {
         throw new Error("Selected supplier not found or inactive.");
@@ -329,7 +329,7 @@ export async function rejectGoodsReceiptAction(
       return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid reason" };
     }
 
-    await prisma.$transaction(async (tx) => {
+    await runTransaction(async (tx) => {
       const grn = await tx.goodsReceipt.findUnique({ where: { id: parsed.data.grnId } });
       if (!grn) throw new Error("GRN not found.");
       if (grn.status !== GrnStatus.PENDING_BILLING) {
@@ -379,7 +379,7 @@ export async function recordSupplierPaymentAction(
     const v = parsed.data;
     const paymentDate = new Date(v.paymentDate);
 
-    await prisma.$transaction(async (tx) => {
+    await runTransaction(async (tx) => {
       const purchase = await tx.purchase.findUnique({
         where: { id: v.purchaseId },
       });
@@ -459,7 +459,7 @@ export async function recordStockAdjustmentAction(
     }
 
     const v = parsed.data;
-    await prisma.$transaction(async (tx) => {
+    await runTransaction(async (tx) => {
       const item = await tx.item.findUnique({ where: { id: v.itemId } });
       if (!item || !item.active) {
         throw new Error("Item not found or inactive.");

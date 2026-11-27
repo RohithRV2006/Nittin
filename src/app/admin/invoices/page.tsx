@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { prisma } from "@/lib/prisma";
+import { getCachedCompanySettings, prisma, withDbRetry } from "@/lib/prisma";
 import {
   InvoicesWorkspace,
   type InvoiceRow,
@@ -14,10 +14,12 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function AdminInvoicesPage() {
-  const [settings, invoices] = await Promise.all([
-    prisma.companySettings.findUnique({ where: { id: "default" } }),
-    prisma.invoice.findMany({
-      orderBy: { invoiceDate: "desc" },
+  const [settings, invoices] = await withDbRetry(() =>
+    Promise.all([
+      getCachedCompanySettings(),
+      prisma.invoice.findMany({
+        orderBy: { invoiceDate: "desc" },
+        take: 200,
       include: {
         order: { select: { orderNumber: true } },
         customer: true,
@@ -41,7 +43,8 @@ export default async function AdminInvoicesPage() {
         },
       },
     }),
-  ]);
+    ])
+  );
 
   const seller = {
     companyName: settings?.companyName ?? "",

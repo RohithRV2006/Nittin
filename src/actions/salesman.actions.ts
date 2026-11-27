@@ -7,7 +7,7 @@ import { requireVerifiedUser } from "@/lib/auth";
 import { money } from "@/lib/decimal";
 import { writeAuditLog } from "@/lib/engines/audit";
 import { getNextDocumentNumber } from "@/lib/engines/sequence";
-import { prisma } from "@/lib/prisma";
+import { prisma, runTransaction } from "@/lib/prisma";
 import { convertUnit } from "@/lib/units";
 import {
   cancelFieldOrderSchema,
@@ -59,7 +59,7 @@ export async function submitFieldOrderAction(
       };
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await runTransaction(async (tx) => {
       const customer = await tx.customer.findUnique({
         where: { id: v.customerId },
       });
@@ -193,7 +193,7 @@ export async function cancelFieldOrderAction(
     }
 
     const { orderId, reason } = parsed.data;
-    await prisma.$transaction(async (tx) => {
+    await runTransaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: orderId } });
       if (!order) throw new Error("Order not found.");
       if (order.salesmanId !== actor.id) {

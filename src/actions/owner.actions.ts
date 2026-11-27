@@ -1,7 +1,7 @@
 "use server";
 import { toSafeErrorMessage } from "@/lib/errors";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import bcrypt from "bcryptjs";
 import { ResetRequestStatus, Role } from "@prisma/client";
 import { requireVerifiedUser } from "@/lib/auth";
@@ -57,6 +57,7 @@ export async function ownerCreateTeamUserAction(
       });
     });
 
+    revalidateTag("company-settings");
     revalidatePath("/dashboard/team");
     revalidatePath("/admin/masters");
     return { ok: true };
@@ -105,6 +106,7 @@ export async function ownerToggleUserActiveAction(
       });
     });
 
+    revalidateTag("company-settings");
     revalidatePath("/dashboard/team");
     revalidatePath("/admin/masters");
     return { ok: true };
@@ -133,6 +135,7 @@ export async function ownerUnlockUserAction(userId: string): Promise<ActionResul
       });
     });
 
+    revalidateTag("company-settings");
     revalidatePath("/dashboard/team");
     revalidatePath("/admin/masters");
     return { ok: true };
@@ -198,6 +201,7 @@ export async function ownerResetUserPasswordAction(
       });
     });
 
+    revalidateTag("company-settings");
     revalidatePath("/dashboard/team");
     revalidatePath("/admin/masters");
     return { ok: true };
@@ -258,6 +262,7 @@ export async function ownerUpdateCompanySettingsAction(
       });
     });
 
+    revalidateTag("company-settings");
     revalidatePath("/dashboard/team");
     revalidatePath("/dashboard");
     revalidatePath("/admin/masters");

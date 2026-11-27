@@ -1,3 +1,4 @@
+import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { isDemoModeEnabled } from "@/lib/auth";
 import { runDemoBenchmarkSeed } from "@/lib/demo-seed";
@@ -24,6 +25,7 @@ export async function POST(request: NextRequest) {
 
   try {
     await runDemoBenchmarkSeed(prisma);
+    revalidateTag("company-settings");
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("Demo benchmark seed error:", err);

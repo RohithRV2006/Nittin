@@ -20,7 +20,7 @@ import { formatINR, money, percent, qty } from "@/lib/decimal";
 import { getItemStockMap } from "@/lib/engines/stock";
 import { formatDisplayQty } from "@/lib/enums";
 import { ROLE_LABELS, type UserRole } from "@/lib/roles";
-import { prisma, withDbRetry } from "@/lib/prisma";
+import { getCachedCompanySettings, prisma, withDbRetry } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +58,7 @@ export default async function OwnerDashboardPage() {
     recentAudits,
   ] = await withDbRetry(() =>
     Promise.all([
-      prisma.companySettings.findUnique({ where: { id: "default" } }),
+      getCachedCompanySettings(),
       prisma.user.count({ where: { role: Role.FACTORY_ADMIN, active: true } }),
       prisma.bOM.count({ where: { active: true } }),
       prisma.order.count({ where: { orderDate: { gte: startOfDay } } }),

@@ -8,7 +8,7 @@ import { StatCard } from "@/components/ui/StatCard";
 import { WorkflowPipeline } from "@/components/ui/WorkflowPipeline";
 import { formatINR, qty } from "@/lib/decimal";
 import { getItemStockMap } from "@/lib/engines/stock";
-import { prisma } from "@/lib/prisma";
+import { getCachedCompanySettings, prisma, withDbRetry } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -37,8 +37,8 @@ export default async function AdminCommandCenterPage() {
     bomsCount,
     stockMap,
     recentAudits,
-  ] = await Promise.all([
-    prisma.companySettings.findUnique({ where: { id: "default" } }),
+  ] = await withDbRetry(() => Promise.all([
+    getCachedCompanySettings(),
     prisma.order.findMany({
       where: { status: { in: [OrderStatus.SUBMITTED, OrderStatus.ON_HOLD] } },
       orderBy: { orderDate: "desc" },
@@ -86,7 +86,7 @@ export default async function AdminCommandCenterPage() {
       take: 6,
       include: { user: { select: { name: true } } },
     }),
-  ]);
+  ]));
 
   const lowStock = items.filter((i) => {
     const bal = stockMap.get(i.id) ?? qty(0);

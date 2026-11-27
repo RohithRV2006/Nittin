@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { Role } from "@prisma/client";
 import { requireVerifiedUser } from "@/lib/auth";
 import { isDatabaseUnavailableError } from "@/lib/errors";
-import { prisma, withDbRetry } from "@/lib/prisma";
+import { getCachedCompanySettings } from "@/lib/prisma";
 import type { UserRole } from "@/lib/roles";
 import { AppShell } from "./AppShell";
 
@@ -15,14 +15,20 @@ export async function PortalShell({
   children: ReactNode;
 }) {
   let user;
+  let settings: { companyName: string; isConfigured: boolean } | null = null;
+
   try {
-    user = await requireVerifiedUser(allowedRoles);
+    const [verifiedUser, cachedSettings] = await Promise.all([
+      requireVerifiedUser(allowedRoles),
+      getCachedCompanySettings().catch(() => null),
+    ]);
+    user = verifiedUser;
+    settings = cachedSettings;
   } catch (err) {
     if (err instanceof Error && err.message === "FORBIDDEN") {
       redirect("/");
     }
     if (err instanceof Error && err.message === "UNAUTHORIZED") {
-      // Clear stale/revoked session cookie via logout route so middleware never loops
       redirect("/api/auth/logout");
     }
     if (isDatabaseUnavailableError(err)) {
@@ -48,18 +54,6 @@ export async function PortalShell({
       );
     }
     redirect("/api/auth/logout");
-  }
-
-  let settings: { companyName: string; isConfigured: boolean } | null = null;
-  try {
-    settings = await withDbRetry(() =>
-      prisma.companySettings.findUnique({
-        where: { id: "default" },
-        select: { companyName: true, isConfigured: true },
-      })
-    );
-  } catch {
-    settings = null;
   }
 
   return (
